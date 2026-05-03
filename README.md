@@ -38,16 +38,15 @@ A powerful and user-friendly Apple Music downloader with support for AAC, ALAC L
 ## Usage
 
 1. **Start the Application**:
-   Double-click `start.bat` or run:
-   ```bash
-   ./start.bat
-   ```
+   - **From Source**: Double-click `start.bat` or run `python run_app.py`.
+   - **Standalone EXE**: Run `dist/LingoMusicDownloader.exe`. This single file contains both the frontend and the backend.
 
 2. **Configure Cookies**:
    Upon first launch, the application will ask for your Apple Music cookies.
    - Log in to [music.apple.com](https://music.apple.com).
    - Use a browser extension (like Cookie-Editor) to export cookies in **Netscape** format.
    - Paste the content into the application's dialog.
+   - The cookies will be saved to a `cookies.txt` file located in the same directory as the EXE.
 
 3. **Search & Download**:
    - Enter keywords (e.g., "Justin Bieber Baby") and search.
