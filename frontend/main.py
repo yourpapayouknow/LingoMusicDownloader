@@ -1,7 +1,7 @@
 import flet as ft
 import asyncio
 import os
-from utils.api import submit_download, get_status, search_apple_music
+from frontend.utils.api import submit_download, get_status, search_apple_music
 
 def main(page: ft.Page):
     page.title = "LingoMusic Downloader"
