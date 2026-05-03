@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class DownloadManager:
     def __init__(self):
         self.apple_music_api = None
-        self.downloader = None
+        self.base_interface = None
         self.download_queue = []
         self.download_status: Dict[str, Any] = {}
         self.is_initialized = False
@@ -45,60 +45,78 @@ class DownloadManager:
                 logger.error("No active Apple Music subscription found.")
                 return False
 
-            base_interface = await AppleMusicBaseInterface.create(
+            self.base_interface = await AppleMusicBaseInterface.create(
                 apple_music_api=self.apple_music_api,
             )
-            
-            # Setup Interfaces
-            song_interface = AppleMusicSongInterface(base=base_interface)
-            music_video_interface = AppleMusicMusicVideoInterface(base=base_interface)
-            uploaded_video_interface = AppleMusicUploadedVideoInterface(base=base_interface)
-            
-            interface = AppleMusicInterface(
-                song=song_interface,
-                music_video=music_video_interface,
-                uploaded_video=uploaded_video_interface,
-            )
-            
-            # Setup Downloaders
-            base_downloader = AppleMusicBaseDownloader(
-                interface=interface,
-                output_path=settings.OUTPUT_PATH
-            )
-            
-            song_downloader = AppleMusicSongDownloader(base=base_downloader)
-            music_video_downloader = AppleMusicMusicVideoDownloader(base=base_downloader)
-            uploaded_video_downloader = AppleMusicUploadedVideoDownloader(base=base_downloader)
-            
-            self.downloader = AppleMusicDownloader(
-                song=song_downloader,
-                music_video=music_video_downloader,
-                uploaded_video=uploaded_video_downloader,
-            )
-            
             self.is_initialized = True
             return True
         except Exception as e:
             logger.error(f"Failed to initialize Gamdl downloader: {e}")
             return False
 
-    async def add_to_queue(self, url: str) -> bool:
+    def _create_downloader(self, codec: str, video_resolution: str, use_wrapper: bool):
+        # Create specialized interfaces
+        song_interface = AppleMusicSongInterface(
+            base=self.base_interface,
+        )
+        music_video_interface = AppleMusicMusicVideoInterface(
+            base=self.base_interface,
+        )
+        uploaded_video_interface = AppleMusicUploadedVideoInterface(
+            base=self.base_interface,
+        )
+        
+        interface = AppleMusicInterface(
+            song=song_interface,
+            music_video=music_video_interface,
+            uploaded_video=uploaded_video_interface,
+        )
+        
+        # Setup Downloaders
+        base_downloader = AppleMusicBaseDownloader(
+            interface=interface,
+            output_path=settings.OUTPUT_PATH
+        )
+        
+        song_downloader = AppleMusicSongDownloader(
+            base=base_downloader,
+            codec_priority=[codec] if codec else ["aac-legacy"]
+        )
+        music_video_downloader = AppleMusicMusicVideoDownloader(
+            base=base_downloader,
+            resolution=video_resolution
+        )
+        uploaded_video_downloader = AppleMusicUploadedVideoDownloader(base=base_downloader)
+        
+        return AppleMusicDownloader(
+            song=song_downloader,
+            music_video=music_video_downloader,
+            uploaded_video=uploaded_video_downloader,
+        )
+
+    async def add_to_queue(self, url: str, codec: str = "aac-legacy", video_resolution: str = "1080p", use_wrapper: bool = False) -> bool:
         if not self.is_initialized:
             logger.error("Downloader not initialized. Please check cookies.txt")
             return False
             
-        self.download_status[url] = {"status": "pending", "items": []}
-        asyncio.create_task(self._process_url(url))
+        self.download_status[url] = {
+            "status": "pending", 
+            "items": [], 
+            "codec": codec,
+            "resolution": video_resolution
+        }
+        
+        downloader = self._create_downloader(codec, video_resolution, use_wrapper)
+        asyncio.create_task(self._process_url(downloader, url))
         return True
 
-    async def _process_url(self, url: str):
+    async def _process_url(self, downloader, url: str):
         try:
             self.download_status[url]["status"] = "processing"
             download_items = []
             
-            async for media in self.downloader.get_download_item_from_url(url):
+            async for media in downloader.get_download_item_from_url(url):
                 download_items.append(media)
-                # Store some minimal info if possible
                 self.download_status[url]["items"].append({"status": "pending"})
             
             self.download_status[url]["status"] = "downloading"
@@ -106,7 +124,7 @@ class DownloadManager:
             for index, item in enumerate(download_items):
                 self.download_status[url]["items"][index]["status"] = "downloading"
                 try:
-                    await self.downloader.download(item)
+                    await downloader.download(item)
                     self.download_status[url]["items"][index]["status"] = "completed"
                 except Exception as e:
                     logger.error(f"Error downloading item: {e}")
