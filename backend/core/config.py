@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     COOKIES_PATH: str = os.path.join(BASE_DIR, "cookies.txt")
     OUTPUT_PATH: str = os.path.join(BASE_DIR, "Apple Music")
+    BIN_DIR: str = os.path.join(BASE_DIR, "backend", "bin")
+    
+    # Tools paths
+    FFMPEG_PATH: str = os.path.join(BIN_DIR, "ffmpeg.exe")
+    MP4DECRYPT_PATH: str = os.path.join(BIN_DIR, "mp4decrypt.exe")
     
     # Gamdl settings
     LOG_LEVEL: str = "INFO"
