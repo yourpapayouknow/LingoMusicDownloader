@@ -1,3 +1,43 @@
-/ffmpeg/ffmpeg.exe
-/ffmpeg/ffplay.exe
-/ffmpeg/ffprobe.exe
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment
+.env
+.flaskenv
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build & Dist
+build/
+dist/
+*.spec
+
+# Project Specific
+cookies.txt
+Apple\ Music/
+bin/
+*.log
+flet_screen*.png
+test_*.py
+
+# WSL Wrapper Binaries/Rootfs
+backend/wsl_wrapper/rootfs/
+backend/wsl_wrapper/wrapper
+backend/wsl_wrapper/compose.yaml
+backend/wsl_wrapper/Dockerfile
+backend/wsl_wrapper/entrypoint.sh
+
+# Batch scripts (Optional to keep in repo, but if they are part of the tool, maybe keep them?)
+# Actually, the user asked to clean up and push. Usually scripts are kept.
+# I'll keep the .bat scripts in the repo if they are necessary for the user to run it.
+# wrapper_setup.bat
+# start.bat
+# run_wsl_wrapper.bat
