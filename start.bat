@@ -7,6 +7,6 @@ start "LingoMusic Backend" cmd /c ".\venv\Scripts\activate && uvicorn backend.ma
 :: Wait a couple of seconds for backend to initialize
 timeout /t 3 /nobreak >nul
 
-:: Start the Streamlit frontend
-echo Starting Frontend UI...
-.\venv\Scripts\activate && cd frontend && streamlit run main.py
+:: Start the Flet frontend (Desktop App Mode)
+echo Starting Flet UI...
+.\venv\Scripts\activate && set PYTHONPATH=%cd% && python frontend/main.py
