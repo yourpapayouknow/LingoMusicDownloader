@@ -1,0 +1,81 @@
+/* Global dark theme overrides */
+[data-testid="stAppViewContainer"] {
+    background-color: #0f172a; /* Tailwind Slate 900 */
+    background-image: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.08), transparent 25%),
+                      radial-gradient(circle at 85% 30%, rgba(232, 121, 249, 0.08), transparent 25%);
+    color: #f8fafc;
+}
+
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+/* Glassmorphism for inputs and containers */
+.stTextInput > div > div > input {
+    background: rgba(30, 41, 59, 0.7); /* Slate 800 with transparency */
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: white;
+    border-radius: 12px;
+    padding: 14px 20px;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+}
+
+.stTextInput > div > div > input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    background: rgba(30, 41, 59, 0.9);
+}
+
+/* Primary Button Styling */
+.stButton > button {
+    background: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 24px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    width: 100%;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.3), 0 4px 6px -2px rgba(139, 92, 246, 0.3);
+    color: white;
+    border: none;
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* Status Cards */
+div[data-testid="stMetricValue"] {
+    font-size: 2rem;
+    font-weight: 700;
+    background: -webkit-linear-gradient(45deg, #38bdf8, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Custom expander/cards */
+[data-testid="stExpander"] {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+}
+
+/* Main Title */
+h1 {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(to right, #e2e8f0, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2rem;
+}
