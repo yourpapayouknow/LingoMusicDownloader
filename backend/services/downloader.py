@@ -17,6 +17,8 @@ from gamdl.interface import (
     AppleMusicMusicVideoInterface,
     AppleMusicSongInterface,
     AppleMusicUploadedVideoInterface,
+    SongCodec,
+    MusicVideoResolution
 )
 
 from backend.core.config import settings
@@ -26,7 +28,6 @@ logger = logging.getLogger(__name__)
 class DownloadManager:
     def __init__(self):
         self.apple_music_api = None
-        self.base_interface = None
         self.download_queue = []
         self.download_status: Dict[str, Any] = {}
         self.is_initialized = False
@@ -45,25 +46,38 @@ class DownloadManager:
                 logger.error("No active Apple Music subscription found.")
                 return False
 
-            self.base_interface = await AppleMusicBaseInterface.create(
-                apple_music_api=self.apple_music_api,
-            )
             self.is_initialized = True
             return True
         except Exception as e:
             logger.error(f"Failed to initialize Gamdl downloader: {e}")
             return False
 
-    def _create_downloader(self, codec: str, video_resolution: str, use_wrapper: bool):
-        # Create specialized interfaces
+    async def _create_downloader(self, codec: str, video_resolution: str, use_wrapper: bool):
+        base_interface = await AppleMusicBaseInterface.create(
+            apple_music_api=self.apple_music_api,
+            use_wrapper=use_wrapper
+        )
+        
+        try:
+            song_codec_enum = SongCodec(codec)
+        except ValueError:
+            song_codec_enum = SongCodec.AAC_LEGACY
+            
+        try:
+            video_res_enum = MusicVideoResolution(video_resolution)
+        except ValueError:
+            video_res_enum = MusicVideoResolution.R1080P
+
         song_interface = AppleMusicSongInterface(
-            base=self.base_interface,
+            base=base_interface,
+            codec_priority=[song_codec_enum]
         )
         music_video_interface = AppleMusicMusicVideoInterface(
-            base=self.base_interface,
+            base=base_interface,
+            resolution=video_res_enum
         )
         uploaded_video_interface = AppleMusicUploadedVideoInterface(
-            base=self.base_interface,
+            base=base_interface,
         )
         
         interface = AppleMusicInterface(
@@ -72,20 +86,15 @@ class DownloadManager:
             uploaded_video=uploaded_video_interface,
         )
         
-        # Setup Downloaders
         base_downloader = AppleMusicBaseDownloader(
             interface=interface,
-            output_path=settings.OUTPUT_PATH
+            output_path=settings.OUTPUT_PATH,
+            mp4decrypt_path=settings.MP4DECRYPT_PATH,
+            ffmpeg_path=settings.FFMPEG_PATH
         )
         
-        song_downloader = AppleMusicSongDownloader(
-            base=base_downloader,
-            codec_priority=[codec] if codec else ["aac-legacy"]
-        )
-        music_video_downloader = AppleMusicMusicVideoDownloader(
-            base=base_downloader,
-            resolution=video_resolution
-        )
+        song_downloader = AppleMusicSongDownloader(base=base_downloader)
+        music_video_downloader = AppleMusicMusicVideoDownloader(base=base_downloader)
         uploaded_video_downloader = AppleMusicUploadedVideoDownloader(base=base_downloader)
         
         return AppleMusicDownloader(
@@ -106,7 +115,7 @@ class DownloadManager:
             "resolution": video_resolution
         }
         
-        downloader = self._create_downloader(codec, video_resolution, use_wrapper)
+        downloader = await self._create_downloader(codec, video_resolution, use_wrapper)
         asyncio.create_task(self._process_url(downloader, url))
         return True
 
