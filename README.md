@@ -41,10 +41,16 @@ cd LingoMusicDownloader
 
 ```powershell
 python -m venv venv
-.\venv\Scripts\activate
-pip install -r backend\requirements.txt
-pip install -r frontend\requirements.txt
+# Install dependencies directly via the venv pip (no activation needed)
+.\venv\Scripts\pip install -r backend\requirements.txt
+.\venv\Scripts\pip install -r frontend\requirements.txt
 ```
+
+> **Note**: Avoid running `.\venv\Scripts\Activate.ps1` directly — Windows blocks unsigned PS1 scripts by default.
+> If you prefer to use `activate`, run this once first:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
 
 ### 3. Set Up the WSL2 Wrapper (for ALAC / Atmos)
 
