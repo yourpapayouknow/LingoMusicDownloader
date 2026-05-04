@@ -224,10 +224,12 @@ def main(page: ft.Page):
     )
 
     page.add(header, ft.Divider(), main_layout)
-    
+
+    # Register dialog in overlay (required for Flet 0.21+; page.dialog is deprecated)
+    page.overlay.append(cookie_dialog)
+
     # Check if cookies exist
     if not os.path.exists(COOKIE_PATH) or os.path.getsize(COOKIE_PATH) < 10:
-        page.dialog = cookie_dialog
         cookie_dialog.open = True
         page.update()
     else:
