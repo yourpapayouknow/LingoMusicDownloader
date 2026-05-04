@@ -2,28 +2,24 @@ import os
 import subprocess
 import urllib.request
 import zipfile
-import sys
 
 
 def check_wsl_installed() -> bool:
     """Return True if WSL is installed and accessible on this system."""
     try:
-        result = subprocess.run(
+        subprocess.run(
             ["wsl", "--status"],
             capture_output=True,
-            text=True,
             timeout=15,
         )
-        # wsl --status returns 0 even on WSL 1; any non-FileNotFoundError means it exists
         return True
     except FileNotFoundError:
         return False
     except subprocess.TimeoutExpired:
-        return True  # Command exists, just slow to respond
+        return True  # Command exists, just slow
 
 
 def prompt_install_wsl() -> None:
-    """Print WSL installation instructions and exit."""
     print()
     print("=" * 60)
     print("  ERROR: WSL2 is not installed on this system.")
@@ -49,11 +45,18 @@ def setup_wsl_wrapper() -> None:
     print("[OK] WSL is available.")
 
     # ── Step 2: Resolve paths ──────────────────────────────────
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    base_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     wrapper_dir = os.path.join(base_dir, "backend", "wsl_wrapper")
     os.makedirs(wrapper_dir, exist_ok=True)
 
     wrapper_binary = os.path.join(wrapper_dir, "wrapper")
+    session_marker = os.path.join(wrapper_dir, ".session_ready")
+
+    # Convert Windows path → WSL path  (e.g. F:\Foo\Bar → /mnt/f/Foo/Bar)
+    drive = wrapper_dir[0].lower()
+    wsl_path = f"/mnt/{drive}/" + wrapper_dir[3:].replace("\\", "/")
 
     # ── Step 3: Download wrapper binary if missing ─────────────
     if not os.path.exists(wrapper_binary):
@@ -76,37 +79,60 @@ def setup_wsl_wrapper() -> None:
         print("[OK] Wrapper binary already exists, skipping download.")
 
     # ── Step 4: Set execute permission via WSL ─────────────────
-    # Convert Windows path → WSL path  (e.g. F:\Foo\Bar → /mnt/f/Foo/Bar)
-    drive = wrapper_dir[0].lower()
-    wsl_path = f"/mnt/{drive}/" + wrapper_dir[3:].replace("\\", "/")
-
     print("Setting execute permissions via WSL...")
-    subprocess.run(["wsl", "-e", "bash", "-c", f"chmod +x '{wsl_path}/wrapper'"])
-    print(f"[OK] Permissions set.")
-
-    # ── Step 5: First-run login ────────────────────────────────
-    rootfs_dir = os.path.join(wrapper_dir, "rootfs")
-    is_first_run = (
-        not os.path.exists(rootfs_dir)
-        or not any(os.scandir(rootfs_dir))
+    subprocess.run(
+        ["wsl", "-e", "bash", "-c", f"chmod +x '{wsl_path}/wrapper'"],
+        capture_output=True,
     )
+    print("[OK] Permissions set.")
 
-    if is_first_run:
-        print()
-        print("=" * 60)
-        print("  First-time setup: Apple ID login required.")
-        print("=" * 60)
-        print("  The Wrapper needs to authenticate with Apple Music.")
-        print("  A 2FA prompt may appear — complete it in the terminal.")
-        print()
-        apple_id = input("  Enter your Apple ID (email): ").strip()
-        apple_pw = input("  Enter your Apple ID password: ").strip()
-        print()
-        print("  Logging in... (complete any 2FA prompt below)")
-        login_cmd = f"cd '{wsl_path}' && ./wrapper -L '{apple_id}:{apple_pw}' -H 0.0.0.0"
+    # ── Step 5: Apple ID login ─────────────────────────────────
+    # Always perform login in the setup script — the user is explicitly
+    # setting up the Wrapper and expects to authenticate here.
+    print()
+    print("=" * 60)
+    print("  Apple ID Login")
+    print("=" * 60)
+    print("  The Wrapper needs to authenticate with Apple Music.")
+    print("  All output from the Wrapper will appear below.")
+    print("  If a 2FA prompt appears, follow the on-screen instructions.")
+    print()
+    print("  NOTE: After a successful login the Wrapper will start")
+    print("        serving on ports 10020/20020/30020.")
+    print("        Press Ctrl+C once you see it running to stop it.")
+    print("        Your login session will be saved for future use.")
+    print("=" * 60)
+    print()
+
+    apple_id = input("  Enter your Apple ID (email): ").strip()
+    apple_pw = input("  Enter your Apple ID password: ").strip()
+
+    print()
+    print("  Starting Wrapper — output below:")
+    print("-" * 60)
+
+    login_cmd = (
+        f"cd '{wsl_path}' && ./wrapper -L '{apple_id}:{apple_pw}' -H 0.0.0.0"
+    )
+    try:
+        # Run WITHOUT capturing output: stdin/stdout/stderr are inherited from
+        # this terminal so the user sees all output and can respond to 2FA.
         subprocess.run(["wsl", "-e", "bash", "-c", login_cmd])
-    else:
-        print("[OK] Session data found. No login needed.")
+    except KeyboardInterrupt:
+        # User pressed Ctrl+C after confirming the Wrapper is running — expected.
+        pass
+
+    print()
+    print("-" * 60)
+
+    # ── Step 6: Mark session as ready ─────────────────────────
+    # Write a marker file so launch.ps1 knows login has been completed.
+    try:
+        with open(session_marker, "w") as f:
+            f.write("session_ready")
+        print("[OK] Session marker saved.")
+    except Exception as e:
+        print(f"[WARN] Could not write session marker: {e}")
 
     print()
     print("=" * 60)

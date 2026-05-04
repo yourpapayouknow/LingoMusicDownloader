@@ -11,7 +11,7 @@ $ProjectDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvPython     = Join-Path $ProjectDir "venv\Scripts\python.exe"
 $RunApp         = Join-Path $ProjectDir "run_app.py"
 $WrapperExe     = Join-Path $ProjectDir "backend\wsl_wrapper\wrapper"
-$WrapperRootfs  = Join-Path $ProjectDir "backend\wsl_wrapper\rootfs"
+$SessionMarker  = Join-Path $ProjectDir "backend\wsl_wrapper\.session_ready"
 
 # Convert Windows path to WSL path  (e.g. F:\Foo\Bar -> /mnt/f/Foo/Bar)
 $driveLetter    = $ProjectDir.Substring(0, 1).ToLower()
@@ -61,16 +61,8 @@ if (-not (Test-Path $WrapperExe)) {
         # Set execute permission
         & wsl -e bash -c "chmod +x '$wslWrapperDir/wrapper'" 2>$null
 
-        # ── Detect first run (no session data in rootfs yet) ──
-        $isFirstRun = $false
-        if (-not (Test-Path $WrapperRootfs)) {
-            $isFirstRun = $true
-        } else {
-            $rootfsFiles = Get-ChildItem $WrapperRootfs -Recurse -File -ErrorAction SilentlyContinue
-            if ($null -eq $rootfsFiles -or $rootfsFiles.Count -eq 0) {
-                $isFirstRun = $true
-            }
-        }
+        # ── Detect first run: check for session marker from setup_wsl.py ──
+        $isFirstRun = -not (Test-Path $SessionMarker)
 
         if ($isFirstRun) {
             # ── First run: need Apple ID login ────────────────
