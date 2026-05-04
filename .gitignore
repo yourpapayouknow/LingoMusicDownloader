@@ -34,6 +34,7 @@ backend/wsl_wrapper/wrapper
 backend/wsl_wrapper/compose.yaml
 backend/wsl_wrapper/Dockerfile
 backend/wsl_wrapper/entrypoint.sh
+backend/wsl_wrapper/.session_ready
 
 # Legacy / generated launch scripts (replaced by launch.ps1)
 # Actually, the user asked to clean up and push. Usually scripts are kept.
