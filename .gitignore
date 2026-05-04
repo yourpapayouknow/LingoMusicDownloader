@@ -35,7 +35,7 @@ backend/wsl_wrapper/compose.yaml
 backend/wsl_wrapper/Dockerfile
 backend/wsl_wrapper/entrypoint.sh
 
-# Batch scripts (Optional to keep in repo, but if they are part of the tool, maybe keep them?)
+# Legacy / generated launch scripts (replaced by launch.ps1)
 # Actually, the user asked to clean up and push. Usually scripts are kept.
 # I'll keep the .bat scripts in the repo if they are necessary for the user to run it.
 # wrapper_setup.bat
