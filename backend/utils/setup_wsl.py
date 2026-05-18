@@ -52,7 +52,15 @@ def setup_wsl_wrapper() -> None:
     os.makedirs(wrapper_dir, exist_ok=True)
 
     wrapper_binary = os.path.join(wrapper_dir, "wrapper")
-    session_marker = os.path.join(wrapper_dir, ".session_ready")
+
+    # Session is confirmed by the SQLite database the wrapper writes after login.
+    # Path mirrors entrypoint.sh: TOKEN_DB_PATH="/app/rootfs/data/data/.../kvs.sqlitedb"
+    # where /app == wrapper's working directory (backend/wsl_wrapper/).
+    session_db = os.path.join(
+        wrapper_dir,
+        "rootfs", "data", "data",
+        "com.apple.android.music", "files", "mpl_db", "kvs.sqlitedb"
+    )
 
     # Convert Windows path → WSL path  (e.g. F:\Foo\Bar → /mnt/f/Foo/Bar)
     drive = wrapper_dir[0].lower()
@@ -117,22 +125,23 @@ def setup_wsl_wrapper() -> None:
     try:
         # Run WITHOUT capturing output: stdin/stdout/stderr are inherited from
         # this terminal so the user sees all output and can respond to 2FA.
+        # The wrapper will serve on 10020/20020/30020 after login.
+        # Press Ctrl+C once you see it running to stop it and continue.
         subprocess.run(["wsl", "-e", "bash", "-c", login_cmd])
     except KeyboardInterrupt:
-        # User pressed Ctrl+C after confirming the Wrapper is running — expected.
-        pass
+        pass  # User pressed Ctrl+C after confirming the Wrapper is running.
 
     print()
     print("-" * 60)
 
-    # ── Step 6: Mark session as ready ─────────────────────────
-    # Write a marker file so launch.ps1 knows login has been completed.
-    try:
-        with open(session_marker, "w") as f:
-            f.write("session_ready")
-        print("[OK] Session marker saved.")
-    except Exception as e:
-        print(f"[WARN] Could not write session marker: {e}")
+    # ── Step 6: Verify session was saved ──────────────────────
+    if os.path.exists(session_db):
+        print("[OK] Session database found. Login successful.")
+    else:
+        print("[WARN] Session database not found at:")
+        print(f"       {session_db}")
+        print("       This may mean Ctrl+C was pressed before the session")
+        print("       was fully written. Try running this script again.")
 
     print()
     print("=" * 60)
