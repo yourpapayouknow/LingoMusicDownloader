@@ -3,6 +3,12 @@ import os
 import logging
 from typing import List, Dict, Any, Optional
 
+from gamdl.api.exceptions import GamdlApiResponseError
+from gamdl.interface.exceptions import (
+    GamdlInterfaceDecryptionNotAvailableError,
+    GamdlInterfaceFormatNotAvailableError,
+)
+
 from gamdl.api import AppleMusicApi
 from gamdl.downloader import (
     AppleMusicBaseDownloader,
@@ -123,28 +129,65 @@ class DownloadManager:
         try:
             self.download_status[url]["status"] = "processing"
             download_items = []
-            
+
             async for media in downloader.get_download_item_from_url(url):
                 download_items.append(media)
                 self.download_status[url]["items"].append({"status": "pending"})
-            
+
             self.download_status[url]["status"] = "downloading"
-            
+
             for index, item in enumerate(download_items):
                 self.download_status[url]["items"][index]["status"] = "downloading"
                 try:
                     await downloader.download(item)
                     self.download_status[url]["items"][index]["status"] = "completed"
+                except GamdlApiResponseError as e:
+                    # Extract HTTP detail from the Apple Music API error
+                    detail = f"{e.message}"
+                    if e.status_code:
+                        detail += f" [HTTP {e.status_code}]"
+                    if e.content:
+                        detail += f" | Response: {str(e.content)[:300]}"
+                    logger.error(f"Apple Music API error: {detail}")
+                    hint = _get_api_error_hint(e.status_code)
+                    self.download_status[url]["items"][index]["status"] = "error"
+                    self.download_status[url]["items"][index]["error"] = detail
+                    self.download_status[url]["items"][index]["hint"] = hint
+                except GamdlInterfaceDecryptionNotAvailableError as e:
+                    msg = "Decryption not available. Ensure the Wrapper is running and 'Use Wrapper' is checked."
+                    logger.error(msg)
+                    self.download_status[url]["items"][index]["status"] = "error"
+                    self.download_status[url]["items"][index]["error"] = msg
+                except GamdlInterfaceFormatNotAvailableError as e:
+                    msg = "Format/codec not available for this track (try a different codec)."
+                    logger.error(msg)
+                    self.download_status[url]["items"][index]["status"] = "error"
+                    self.download_status[url]["items"][index]["error"] = msg
                 except Exception as e:
-                    logger.error(f"Error downloading item: {e}")
+                    logger.error(f"Error downloading item: {e}", exc_info=True)
                     self.download_status[url]["items"][index]["status"] = "error"
                     self.download_status[url]["items"][index]["error"] = str(e)
-            
+
             self.download_status[url]["status"] = "completed"
-            
+
         except Exception as e:
-            logger.error(f"Error processing url {url}: {e}")
+            logger.error(f"Error processing url {url}: {e}", exc_info=True)
             self.download_status[url]["status"] = "error"
             self.download_status[url]["error"] = str(e)
+
+
+def _get_api_error_hint(status_code: Optional[int]) -> str:
+    """Return a user-friendly hint based on the HTTP status code."""
+    if status_code is None:
+        return ("Could not reach the Apple Music API. "
+                "If using Wrapper, verify it is running (ports 10020 & 20020).")
+    if status_code in (401, 403):
+        return "Cookies may be expired. Re-export Apple Music cookies and update cookies.txt."
+    if status_code == 404:
+        return "Track not found or not available in your region."
+    if status_code == 429:
+        return "Rate limited by Apple Music. Wait a moment and try again."
+    return f"Unexpected HTTP {status_code} from Apple Music API."
+
 
 manager = DownloadManager()
