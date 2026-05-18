@@ -61,39 +61,18 @@ if (-not (Test-Path $WrapperExe)) {
         # Set execute permission
         & wsl -e bash -c "chmod +x '$wslWrapperDir/wrapper'" 2>$null
 
-        # ── Detect first run: check for session marker from setup_wsl.py ──
-        $isFirstRun = -not (Test-Path $SessionMarker)
-
-        if ($isFirstRun) {
-            # ── First run: need Apple ID login ────────────────
+        # ── Check session marker written by setup_wsl.py ──────
+        if (-not (Test-Path $SessionMarker)) {
             Write-Host ""
-            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host "   First Run: Apple ID Login Required" -ForegroundColor Yellow
-            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host "  The Wrapper must authenticate with Apple Music once." -ForegroundColor White
-            Write-Host "  If 2FA is needed, you will be prompted in this window." -ForegroundColor White
-            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
+            Write-Host "  [WARN] No Wrapper session found." -ForegroundColor DarkYellow
+            Write-Host "         ALAC / Atmos downloads require a one-time Apple ID login." -ForegroundColor DarkYellow
+            Write-Host "         Please run the setup script in a terminal first:" -ForegroundColor DarkYellow
             Write-Host ""
-            $appleId = Read-Host "  Enter your Apple ID (email)"
-            $securePw = Read-Host "  Enter your Apple ID password" -AsSecureString
-            $bstr    = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePw)
-            $plainPw = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-
+            Write-Host "           python backend\utils\setup_wsl.py" -ForegroundColor White
             Write-Host ""
-            Write-Host "  Logging in... complete any 2FA prompt that appears." -ForegroundColor Cyan
-
-            # Run visibly so the user can interact with 2FA
-            $loginCmd = "cd '$wslWrapperDir' && ./wrapper -L '${appleId}:${plainPw}' -H 0.0.0.0"
-            $wrapperProc = Start-Process -FilePath "wsl" `
-                                         -ArgumentList "-e", "bash", "-c", $loginCmd `
-                                         -PassThru  # Normal (visible) window for 2FA interaction
-
-            Write-Host "  Waiting 10 seconds for login to complete..." -ForegroundColor Gray
-            Start-Sleep -Seconds 10
-            $wrapperStarted = $true
+            Write-Host "         Skipping Wrapper for now. AAC downloads still work." -ForegroundColor DarkYellow
         } else {
-            # ── Normal start: session already exists ──────────
+            # ── Session exists: start Wrapper in server mode ───
             $serverCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
             $wrapperProc = Start-Process -FilePath "wsl" `
                                          -ArgumentList "-e", "bash", "-c", $serverCmd `
