@@ -7,15 +7,20 @@ $host.UI.RawUI.WindowTitle = "LingoMusicDownloader - Launching..."
 $ErrorActionPreference = "Continue"
 
 # ── Resolve paths ──────────────────────────────────────────────
-$ProjectDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
-$VenvPython     = Join-Path $ProjectDir "venv\Scripts\python.exe"
-$RunApp         = Join-Path $ProjectDir "run_app.py"
-$WrapperExe     = Join-Path $ProjectDir "backend\wsl_wrapper\wrapper"
-$SessionMarker  = Join-Path $ProjectDir "backend\wsl_wrapper\.session_ready"
+$ProjectDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
+$VenvPython    = Join-Path $ProjectDir "venv\Scripts\python.exe"
+$RunApp        = Join-Path $ProjectDir "run_app.py"
+$WrapperExe    = Join-Path $ProjectDir "backend\wsl_wrapper\wrapper"
+
+# Session is confirmed by the SQLite database the wrapper writes after login.
+# Path mirrors entrypoint.sh: TOKEN_DB_PATH="/app/rootfs/data/data/.../kvs.sqlitedb"
+# where /app is the wrapper's working directory (backend\wsl_wrapper\).
+$SessionDB     = Join-Path $ProjectDir `
+    "backend\wsl_wrapper\rootfs\data\data\com.apple.android.music\files\mpl_db\kvs.sqlitedb"
 
 # Convert Windows path to WSL path  (e.g. F:\Foo\Bar -> /mnt/f/Foo/Bar)
-$driveLetter    = $ProjectDir.Substring(0, 1).ToLower()
-$wslWrapperDir  = "/mnt/$driveLetter/" + $ProjectDir.Substring(3).Replace("\", "/") + "/backend/wsl_wrapper"
+$driveLetter   = $ProjectDir.Substring(0, 1).ToLower()
+$wslWrapperDir = "/mnt/$driveLetter/" + $ProjectDir.Substring(3).Replace("\", "/") + "/backend/wsl_wrapper"
 
 Write-Host ""
 Write-Host "  =====================================================" -ForegroundColor Cyan
@@ -56,22 +61,26 @@ if (-not (Test-Path $WrapperExe)) {
     }
 
     if (-not $wslOk) {
-        Write-Host "  [WARN] WSL is not available on this system. Skipping Wrapper." -ForegroundColor DarkYellow
+        Write-Host "  [WARN] WSL is not available. Skipping Wrapper." -ForegroundColor DarkYellow
     } else {
         # Set execute permission
         & wsl -e bash -c "chmod +x '$wslWrapperDir/wrapper'" 2>$null
 
-        # ── Check session marker written by setup_wsl.py ──────
-        if (-not (Test-Path $SessionMarker)) {
-            # ── First run: interactive Apple ID login in THIS window ──
+        # ── Detect session by the SQLite DB the wrapper writes after login ──
+        # This is the same file entrypoint.sh checks: TOKEN_DB_PATH
+        $isLoggedIn = Test-Path $SessionDB
+
+        if (-not $isLoggedIn) {
+            # ── First run: need interactive Apple ID login ─────────────────
             Write-Host ""
             Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host "   Wrapper: First-time Apple ID Login Required" -ForegroundColor Yellow
+            Write-Host "   Wrapper: First-time Apple ID Login" -ForegroundColor Yellow
             Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host "  Your credentials are needed once to authenticate." -ForegroundColor White
-            Write-Host "  All Wrapper output will appear in this window." -ForegroundColor White
-            Write-Host "  Complete any 2FA prompt that appears below." -ForegroundColor White
-            Write-Host "  Press Ctrl+C once you see the Wrapper is running." -ForegroundColor White
+            Write-Host "  Step 1: Enter your Apple ID credentials below." -ForegroundColor White
+            Write-Host "  Step 2: A new window will open — watch for output." -ForegroundColor White
+            Write-Host "  Step 3: Approve the 2FA request on your phone." -ForegroundColor White
+            Write-Host "  Step 4: Once you see the Wrapper serving, come back" -ForegroundColor White
+            Write-Host "          here and press Enter to launch the app." -ForegroundColor White
             Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
             Write-Host ""
 
@@ -81,43 +90,33 @@ if (-not (Test-Path $WrapperExe)) {
             $plainPw  = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
             [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 
-            Write-Host ""
-            Write-Host "  Starting Wrapper login — output below:" -ForegroundColor Cyan
-            Write-Host "  (Press Ctrl+C once you see it serving to continue)" -ForegroundColor Gray
-            Write-Host ("  " + "-" * 53)
-
             $loginCmd = "cd '$wslWrapperDir' && ./wrapper -L '${appleId}:${plainPw}' -H 0.0.0.0"
 
-            # Run with & operator — inherits current terminal's stdin/stdout/stderr.
-            # The user sees all wrapper output and can interact with 2FA directly.
-            # Ctrl+C from the user stops the process and execution continues here.
-            & wsl -e bash -c $loginCmd
+            # Open in a NEW VISIBLE window so the user can see output and interact
+            # with 2FA. Do NOT kill this process — it IS the serving instance.
+            $wrapperProc = Start-Process -FilePath "wsl" `
+                                         -ArgumentList "-e", "bash", "-c", $loginCmd `
+                                         -WindowStyle Normal `
+                                         -PassThru
 
-            Write-Host ("  " + "-" * 53)
             Write-Host ""
+            Write-Host "  Wrapper is starting in the new window." -ForegroundColor Cyan
+            Write-Host "  Approve the 2FA notification on your phone." -ForegroundColor Cyan
+            Write-Host ""
+            Read-Host "  Press Enter here once the Wrapper window shows it is serving"
 
-            # Write session marker so future launches skip this step
-            try {
-                Set-Content -Path $SessionMarker -Value "session_ready" -Encoding UTF8
-                Write-Host "  [OK]   Session saved." -ForegroundColor Green
-            } catch {
-                Write-Host "  [WARN] Could not save session marker: $_" -ForegroundColor DarkYellow
+            # Verify the session DB was actually written
+            if (Test-Path $SessionDB) {
+                Write-Host "  [OK]   Session confirmed (database found)." -ForegroundColor Green
+            } else {
+                Write-Host "  [WARN] Session database not found yet." -ForegroundColor DarkYellow
+                Write-Host "         The Wrapper may still be initialising." -ForegroundColor DarkYellow
             }
 
-            # Restart wrapper in server mode (minimised) for this session
-            Write-Host "  Restarting Wrapper in server mode..." -ForegroundColor Cyan
-            $serverCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
-            $wrapperProc = Start-Process -FilePath "wsl" `
-                                         -ArgumentList "-e", "bash", "-c", $serverCmd `
-                                         -WindowStyle Minimized `
-                                         -PassThru
-            Write-Host "  [OK]   Wrapper running (PID $($wrapperProc.Id), minimised)." -ForegroundColor Green
-            Write-Host "         Waiting 3 seconds to stabilise..." -ForegroundColor Gray
-            Start-Sleep -Seconds 3
             $wrapperStarted = $true
 
         } else {
-            # ── Session exists: start Wrapper in server mode ───
+            # ── Session exists: start Wrapper minimised in server mode ─────
             $serverCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
             $wrapperProc = Start-Process -FilePath "wsl" `
                                          -ArgumentList "-e", "bash", "-c", $serverCmd `
