@@ -63,14 +63,59 @@ if (-not (Test-Path $WrapperExe)) {
 
         # ── Check session marker written by setup_wsl.py ──────
         if (-not (Test-Path $SessionMarker)) {
+            # ── First run: interactive Apple ID login in THIS window ──
             Write-Host ""
-            Write-Host "  [WARN] No Wrapper session found." -ForegroundColor DarkYellow
-            Write-Host "         ALAC / Atmos downloads require a one-time Apple ID login." -ForegroundColor DarkYellow
-            Write-Host "         Please run the setup script in a terminal first:" -ForegroundColor DarkYellow
+            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
+            Write-Host "   Wrapper: First-time Apple ID Login Required" -ForegroundColor Yellow
+            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
+            Write-Host "  Your credentials are needed once to authenticate." -ForegroundColor White
+            Write-Host "  All Wrapper output will appear in this window." -ForegroundColor White
+            Write-Host "  Complete any 2FA prompt that appears below." -ForegroundColor White
+            Write-Host "  Press Ctrl+C once you see the Wrapper is running." -ForegroundColor White
+            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
             Write-Host ""
-            Write-Host "           python backend\utils\setup_wsl.py" -ForegroundColor White
+
+            $appleId  = Read-Host "  Enter your Apple ID (email)"
+            $securePw = Read-Host "  Enter your Apple ID password" -AsSecureString
+            $bstr     = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePw)
+            $plainPw  = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+
             Write-Host ""
-            Write-Host "         Skipping Wrapper for now. AAC downloads still work." -ForegroundColor DarkYellow
+            Write-Host "  Starting Wrapper login — output below:" -ForegroundColor Cyan
+            Write-Host "  (Press Ctrl+C once you see it serving to continue)" -ForegroundColor Gray
+            Write-Host ("  " + "-" * 53)
+
+            $loginCmd = "cd '$wslWrapperDir' && ./wrapper -L '${appleId}:${plainPw}' -H 0.0.0.0"
+
+            # Run with & operator — inherits current terminal's stdin/stdout/stderr.
+            # The user sees all wrapper output and can interact with 2FA directly.
+            # Ctrl+C from the user stops the process and execution continues here.
+            & wsl -e bash -c $loginCmd
+
+            Write-Host ("  " + "-" * 53)
+            Write-Host ""
+
+            # Write session marker so future launches skip this step
+            try {
+                Set-Content -Path $SessionMarker -Value "session_ready" -Encoding UTF8
+                Write-Host "  [OK]   Session saved." -ForegroundColor Green
+            } catch {
+                Write-Host "  [WARN] Could not save session marker: $_" -ForegroundColor DarkYellow
+            }
+
+            # Restart wrapper in server mode (minimised) for this session
+            Write-Host "  Restarting Wrapper in server mode..." -ForegroundColor Cyan
+            $serverCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
+            $wrapperProc = Start-Process -FilePath "wsl" `
+                                         -ArgumentList "-e", "bash", "-c", $serverCmd `
+                                         -WindowStyle Minimized `
+                                         -PassThru
+            Write-Host "  [OK]   Wrapper running (PID $($wrapperProc.Id), minimised)." -ForegroundColor Green
+            Write-Host "         Waiting 3 seconds to stabilise..." -ForegroundColor Gray
+            Start-Sleep -Seconds 3
+            $wrapperStarted = $true
+
         } else {
             # ── Session exists: start Wrapper in server mode ───
             $serverCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
