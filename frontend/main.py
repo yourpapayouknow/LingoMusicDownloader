@@ -1,7 +1,10 @@
 import flet as ft
 import asyncio
+import logging
 import os
 from frontend.utils.api import submit_download, get_status, get_health, search_apple_music
+
+logger = logging.getLogger(__name__)
 
 def main(page: ft.Page):
     page.title = "LingoMusic Downloader"
@@ -93,7 +96,7 @@ def main(page: ft.Page):
             page.update()
             return
             
-        # Parse gamdl API search results (format can be tricky)
+        # Parse gamdl API search results
         results = data.get("results", {})
         has_results = False
         
@@ -114,85 +117,107 @@ def main(page: ft.Page):
         on_submit=perform_search
     )
     search_button = ft.ElevatedButton(
-        content=ft.Text("🔍"),
+        content=ft.Text("Search"),
         on_click=perform_search
     )
-    # Status Polling Task
+
+    # ── Status Polling Task ────────────────────────────────────
     async def poll_status():
         while True:
-            # Fetch download status and wrapper health in parallel
-            status_ok, data   = await asyncio.to_thread(get_status)
-            health_ok, health = await asyncio.to_thread(get_health)
-            status_container.controls.clear()
+            try:
+                status_ok, data   = await asyncio.to_thread(get_status)
+                health_ok, health = await asyncio.to_thread(get_health)
+                status_container.controls.clear()
 
-            # ── Wrapper health indicator ──────────────────────
-            if health_ok:
-                wrapper_info = health.get("wrapper", {})
-                all_ok = wrapper_info.get("all_ok", False)
-                dec_ok = wrapper_info.get("decrypt_port", {}).get("reachable", False)
-                m3u8_ok = wrapper_info.get("m3u8_port", {}).get("reachable", False)
-                if all_ok:
-                    wrapper_status_text = ft.Text("✅ Wrapper: Online (10020 & 20020)", color="green", size=11)
-                else:
-                    ports = f"10020={'✓' if dec_ok else '✗'}  20020={'✓' if m3u8_ok else '✗'}"
-                    wrapper_status_text = ft.Text(
-                        f"⚠️ Wrapper: Offline ({ports}) — ALAC/Atmos unavailable",
-                        color="orange", size=11
+                # Wrapper health indicator
+                if health_ok:
+                    wrapper_info = health.get("wrapper", {})
+                    all_ok  = wrapper_info.get("all_ok", False)
+                    dec_ok  = wrapper_info.get("decrypt_port", {}).get("reachable", False)
+                    m3u8_ok = wrapper_info.get("m3u8_port", {}).get("reachable", False)
+                    if all_ok:
+                        w_label = "[OK] Wrapper: Online (10020 & 20020)"
+                        w_color = "green"
+                    else:
+                        d_s = "OK"   if dec_ok  else "FAIL"
+                        m_s = "OK"   if m3u8_ok else "FAIL"
+                        w_label = f"[WARN] Wrapper offline (10020:{d_s} 20020:{m_s}) - ALAC/Atmos unavailable"
+                        w_color = "orange"
+                    status_container.controls.append(
+                        ft.Text(w_label, color=w_color, size=11)
                     )
-                status_container.controls.append(wrapper_status_text)
-                status_container.controls.append(ft.Divider(height=6))
+                    status_container.controls.append(ft.Divider())
 
-            if not status_ok:
-                status_container.controls.append(ft.Text("Backend Offline", color="red"))
-            else:
-                downloads = data.get("downloads", {})
-                if not downloads:
-                    status_container.controls.append(ft.Text("No active downloads."))
+                if not status_ok:
+                    status_container.controls.append(ft.Text("Backend Offline", color="red"))
                 else:
-                    for url, info in downloads.items():
-                        status = info.get("status", "unknown")
-                        items  = info.get("items", [])
-                        task_error = info.get("error", "")
+                    downloads = data.get("downloads", {})
+                    if not downloads:
+                        status_container.controls.append(ft.Text("No active downloads."))
+                    else:
+                        for url, info in downloads.items():
+                            status     = info.get("status", "unknown")
+                            items      = info.get("items", [])
+                            task_error = info.get("error", "")
 
-                        # Build per-item detail rows
-                        item_rows = []
-                        for idx, item in enumerate(items):
-                            item_status = item.get("status", "pending")
-                            item_error  = item.get("error", "")
-                            item_hint   = item.get("hint", "")
-                            color = {"completed": "green", "error": "red",
-                                     "downloading": "blue", "pending": "grey"}.get(item_status, "grey")
-                            item_rows.append(ft.Text(f"  Track {idx+1}: {item_status}", color=color, size=12))
-                            if item_error:
-                                item_rows.append(ft.Text(f"    ✗ {item_error}", color="red400", size=11))
-                            if item_hint:
-                                item_rows.append(ft.Text(f"    💡 {item_hint}", color="orange", size=11))
+                            card_rows = [
+                                ft.Text(
+                                    f"Task: {url.split('?')[0].split('/')[-1]}",
+                                    weight="bold"
+                                ),
+                                ft.Text(
+                                    f"Status: {status.title()}",
+                                    color="red" if status == "error" else None
+                                ),
+                            ]
+                            if task_error:
+                                card_rows.append(
+                                    ft.Text(f"Error: {task_error}", color="red400", size=11)
+                                )
+                            if status in ("downloading", "processing"):
+                                card_rows.append(ft.ProgressBar())
 
-                        status_color = "red" if status == "error" else None
-                        card_content = [
-                            ft.Text(f"Task: {url.split('?')[0].split('/')[-1]}", weight="bold"),
-                            ft.Text(f"Status: {status.title()}", color=status_color),
-                        ]
-                        if task_error:
-                            card_content.append(ft.Text(f"✗ {task_error}", color="red400", size=11))
-                        if status in ("downloading", "processing"):
-                            card_content.append(ft.ProgressBar())
-                        card_content.extend(item_rows)
+                            for idx, item in enumerate(items):
+                                i_status = item.get("status", "pending")
+                                i_error  = item.get("error", "")
+                                i_hint   = item.get("hint", "")
+                                c = {
+                                    "completed":  "green",
+                                    "error":      "red",
+                                    "downloading":"blue",
+                                    "pending":    "grey",
+                                }.get(i_status, "grey")
+                                card_rows.append(
+                                    ft.Text(f"  Track {idx+1}: {i_status}", color=c, size=12)
+                                )
+                                if i_error:
+                                    card_rows.append(
+                                        ft.Text(f"    {i_error}", color="red400", size=11)
+                                    )
+                                if i_hint:
+                                    card_rows.append(
+                                        ft.Text(f"    Hint: {i_hint}", color="orange", size=11)
+                                    )
 
-                        dl_card = ft.Card(
-                            content=ft.Container(
-                                padding=10,
-                                content=ft.Column(card_content)
+                            status_container.controls.append(
+                                ft.Card(
+                                    content=ft.Container(
+                                        padding=10,
+                                        content=ft.Column(card_rows)
+                                    )
+                                )
                             )
-                        )
-                        status_container.controls.append(dl_card)
 
-            page.update()
+                page.update()
+
+            except Exception as poll_err:
+                # Never let a poll error crash the Flet event loop
+                logger.warning(f"poll_status error: {poll_err}", exc_info=True)
+
             await asyncio.sleep(2)
 
-    # Layout
+    # ── Layout ─────────────────────────────────────────────────
     header = ft.Row([
-        ft.Text("🎵", size=30, color="blue400"),
         ft.Text("LingoMusic Downloader", size=24, weight="bold")
     ])
     
@@ -219,8 +244,10 @@ def main(page: ft.Page):
         ], expand=1)
     ], expand=True)
 
-    # Cookie Check Logic
-    COOKIE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cookies.txt")
+    # ── Cookie Check Logic ─────────────────────────────────────
+    COOKIE_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cookies.txt"
+    )
     
     def on_save_cookies(e):
         if not cookie_input.value:
