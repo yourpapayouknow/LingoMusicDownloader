@@ -35,6 +35,16 @@ def get_status():
     except Exception as e:
         return False, {"error": str(e)}
 
+def get_health():
+    """Check wrapper port connectivity and cookies status."""
+    try:
+        response = requests.get(f"{BASE_URL}/health", timeout=3)
+        if response.status_code == 200:
+            return True, response.json()
+        return False, {}
+    except Exception:
+        return False, {}
+
 def search_apple_music(term: str):
     """Search Apple Music."""
     try:

@@ -1,7 +1,7 @@
 import flet as ft
 import asyncio
 import os
-from frontend.utils.api import submit_download, get_status, search_apple_music
+from frontend.utils.api import submit_download, get_status, get_health, search_apple_music
 
 def main(page: ft.Page):
     page.title = "LingoMusic Downloader"
@@ -117,14 +117,32 @@ def main(page: ft.Page):
         content=ft.Text("🔍"),
         on_click=perform_search
     )
-    
     # Status Polling Task
     async def poll_status():
         while True:
-            success, data = await asyncio.to_thread(get_status)
+            # Fetch download status and wrapper health in parallel
+            status_ok, data   = await asyncio.to_thread(get_status)
+            health_ok, health = await asyncio.to_thread(get_health)
             status_container.controls.clear()
-            
-            if not success:
+
+            # ── Wrapper health indicator ──────────────────────
+            if health_ok:
+                wrapper_info = health.get("wrapper", {})
+                all_ok = wrapper_info.get("all_ok", False)
+                dec_ok = wrapper_info.get("decrypt_port", {}).get("reachable", False)
+                m3u8_ok = wrapper_info.get("m3u8_port", {}).get("reachable", False)
+                if all_ok:
+                    wrapper_status_text = ft.Text("✅ Wrapper: Online (10020 & 20020)", color="green", size=11)
+                else:
+                    ports = f"10020={'✓' if dec_ok else '✗'}  20020={'✓' if m3u8_ok else '✗'}"
+                    wrapper_status_text = ft.Text(
+                        f"⚠️ Wrapper: Offline ({ports}) — ALAC/Atmos unavailable",
+                        color="orange", size=11
+                    )
+                status_container.controls.append(wrapper_status_text)
+                status_container.controls.append(ft.Divider(height=6))
+
+            if not status_ok:
                 status_container.controls.append(ft.Text("Backend Offline", color="red"))
             else:
                 downloads = data.get("downloads", {})
@@ -133,20 +151,42 @@ def main(page: ft.Page):
                 else:
                     for url, info in downloads.items():
                         status = info.get("status", "unknown")
-                        items = info.get("items", [])
-                        
+                        items  = info.get("items", [])
+                        task_error = info.get("error", "")
+
+                        # Build per-item detail rows
+                        item_rows = []
+                        for idx, item in enumerate(items):
+                            item_status = item.get("status", "pending")
+                            item_error  = item.get("error", "")
+                            item_hint   = item.get("hint", "")
+                            color = {"completed": "green", "error": "red",
+                                     "downloading": "blue", "pending": "grey"}.get(item_status, "grey")
+                            item_rows.append(ft.Text(f"  Track {idx+1}: {item_status}", color=color, size=12))
+                            if item_error:
+                                item_rows.append(ft.Text(f"    ✗ {item_error}", color="red400", size=11))
+                            if item_hint:
+                                item_rows.append(ft.Text(f"    💡 {item_hint}", color="orange", size=11))
+
+                        status_color = "red" if status == "error" else None
+                        card_content = [
+                            ft.Text(f"Task: {url.split('?')[0].split('/')[-1]}", weight="bold"),
+                            ft.Text(f"Status: {status.title()}", color=status_color),
+                        ]
+                        if task_error:
+                            card_content.append(ft.Text(f"✗ {task_error}", color="red400", size=11))
+                        if status in ("downloading", "processing"):
+                            card_content.append(ft.ProgressBar())
+                        card_content.extend(item_rows)
+
                         dl_card = ft.Card(
                             content=ft.Container(
                                 padding=10,
-                                content=ft.Column([
-                                    ft.Text(f"Task: {url.split('?')[0].split('/')[-1]}", weight="bold"),
-                                    ft.Text(f"Status: {status.title()}"),
-                                    ft.ProgressBar(value=1.0 if status == 'completed' else None) if status in ['downloading', 'processing'] else ft.Container()
-                                ])
+                                content=ft.Column(card_content)
                             )
                         )
                         status_container.controls.append(dl_card)
-                        
+
             page.update()
             await asyncio.sleep(2)
 
