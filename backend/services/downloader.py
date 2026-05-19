@@ -37,6 +37,10 @@ class DownloadManager:
         self.download_queue = []
         self.download_status: Dict[str, Any] = {}
         self.is_initialized = False
+        # Strong references to running tasks.
+        # asyncio only keeps *weak* refs; without this the GC destroys
+        # pending tasks mid-run and causes 'aclose() already running'.
+        self._tasks: set = set()
 
     async def initialize(self):
         if not os.path.exists(settings.COOKIES_PATH):
@@ -122,7 +126,10 @@ class DownloadManager:
         }
         
         downloader = await self._create_downloader(codec, video_resolution, use_wrapper)
-        asyncio.create_task(self._process_url(downloader, url))
+        task = asyncio.create_task(self._process_url(downloader, url))
+        # Keep a strong reference so GC cannot destroy the task before it finishes.
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
         return True
 
     async def _process_url(self, downloader, url: str):
