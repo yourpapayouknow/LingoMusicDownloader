@@ -4,7 +4,7 @@
 # ==============================================================
 
 $host.UI.RawUI.WindowTitle = "LingoMusicDownloader - Launching..."
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"   # Fail fast so errors are visible
 
 # ── Resolve paths ──────────────────────────────────────────────
 $ProjectDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,35 +12,34 @@ $VenvPython    = Join-Path $ProjectDir "venv\Scripts\python.exe"
 $RunApp        = Join-Path $ProjectDir "run_app.py"
 $WrapperExe    = Join-Path $ProjectDir "backend\wsl_wrapper\wrapper"
 
-# Session is confirmed by the SQLite database the wrapper writes after login.
-# Path mirrors entrypoint.sh: TOKEN_DB_PATH="/app/rootfs/data/data/.../kvs.sqlitedb"
-$SessionDB     = Join-Path $ProjectDir `
+# Session DB written by wrapper after successful login (mirrors entrypoint.sh)
+$SessionDB = Join-Path $ProjectDir `
     "backend\wsl_wrapper\rootfs\data\data\com.apple.android.music\files\mpl_db\kvs.sqlitedb"
 
 # Convert Windows path to WSL path  (e.g. F:\Foo\Bar -> /mnt/f/Foo/Bar)
 $driveLetter   = $ProjectDir.Substring(0, 1).ToLower()
 $wslWrapperDir = "/mnt/$driveLetter/" + $ProjectDir.Substring(3).Replace("\", "/") + "/backend/wsl_wrapper"
 
-# ── Helper: poll a TCP port until open or timeout ──────────────
-function Wait-Port {
-    param(
-        [string]$Host   = "127.0.0.1",
-        [int]   $Port   = 10020,
-        [int]   $Timeout = 20   # seconds
-    )
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    while ($sw.Elapsed.TotalSeconds -lt $Timeout) {
-        try {
-            $tcp = [System.Net.Sockets.TcpClient]::new()
-            $tcp.Connect($Host, $Port)
-            $tcp.Close()
-            return $true
-        } catch { }
+# ── Port utilities (avoid $Host — that is a PowerShell reserved variable) ──
+function Test-TcpPort ([string]$Addr, [int]$Port) {
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $tcp.Connect($Addr, $Port)
+        $tcp.Close()
+        return $true
+    } catch { return $false }
+}
+
+function Wait-TcpPort ([string]$Addr, [int]$Port, [int]$TimeoutSec) {
+    $deadline = [DateTime]::Now.AddSeconds($TimeoutSec)
+    while ([DateTime]::Now -lt $deadline) {
+        if (Test-TcpPort $Addr $Port) { return $true }
         Start-Sleep -Milliseconds 500
     }
     return $false
 }
 
+# ── Banner ─────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  =====================================================" -ForegroundColor Cyan
 Write-Host "    LingoMusicDownloader - Starting up..." -ForegroundColor Cyan
@@ -51,7 +50,7 @@ Write-Host ""
 Write-Host "  [1/3] Checking Python virtual environment..." -ForegroundColor Yellow
 if (-not (Test-Path $VenvPython)) {
     Write-Host "  [ERROR] Virtual environment not found." -ForegroundColor Red
-    Write-Host "          Please run the following commands first:" -ForegroundColor Red
+    Write-Host "          Run these commands first:" -ForegroundColor Red
     Write-Host "            python -m venv venv" -ForegroundColor White
     Write-Host "            .\venv\Scripts\pip install -r backend\requirements.txt" -ForegroundColor White
     Write-Host "            .\venv\Scripts\pip install -r frontend\requirements.txt" -ForegroundColor White
@@ -60,130 +59,108 @@ if (-not (Test-Path $VenvPython)) {
 }
 Write-Host "  [OK]   venv found." -ForegroundColor Green
 
-# ── Step 2: Start WSL Wrapper ──────────────────────────────────
+# ── Step 2: WSL Wrapper ────────────────────────────────────────
 Write-Host ""
-Write-Host "  [2/3] Starting Apple Music Wrapper in WSL..." -ForegroundColor Yellow
+Write-Host "  [2/3] Apple Music Wrapper..." -ForegroundColor Yellow
 $wrapperStarted = $false
 $wrapperProc    = $null
 
 if (-not (Test-Path $WrapperExe)) {
-    Write-Host "  [WARN] Wrapper binary not found." -ForegroundColor DarkYellow
+    Write-Host "  [SKIP] Wrapper binary not found." -ForegroundColor DarkYellow
     Write-Host "         Run: python backend\utils\setup_wsl.py" -ForegroundColor DarkYellow
-    Write-Host "         Skipping Wrapper. AAC downloads still work." -ForegroundColor DarkYellow
 } else {
-    # Check WSL availability
-    try {
-        $null = & wsl --status 2>&1
-        $wslOk = $true
-    } catch {
-        $wslOk = $false
-    }
-
-    if (-not $wslOk) {
-        Write-Host "  [WARN] WSL is not available. Skipping Wrapper." -ForegroundColor DarkYellow
+    # ── 2a. Check if wrapper is already running ────────────────
+    if (Test-TcpPort "127.0.0.1" 10020) {
+        Write-Host "  [OK]   Wrapper already running on port 10020." -ForegroundColor Green
+        $wrapperStarted = $true
     } else {
-        # Set execute permission
-        & wsl -e bash -c "chmod +x '$wslWrapperDir/wrapper'" 2>$null
+        # ── 2b. Check WSL availability ─────────────────────────
+        $wslOk = $false
+        try { $null = wsl --status 2>&1; $wslOk = $true } catch {}
 
-        $isLoggedIn = Test-Path $SessionDB
-
-        if (-not $isLoggedIn) {
-            # ── First run: interactive Apple ID login ──────────
-            Write-Host ""
-            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host "   Wrapper: First-time Apple ID Login" -ForegroundColor Yellow
-            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host "  Step 1: Enter your Apple ID credentials below." -ForegroundColor White
-            Write-Host "  Step 2: A new window will open - watch for output." -ForegroundColor White
-            Write-Host "  Step 3: Approve the 2FA request on your phone." -ForegroundColor White
-            Write-Host "  Step 4: Once you see the Wrapper serving, come back" -ForegroundColor White
-            Write-Host "          here and press Enter to launch the app." -ForegroundColor White
-            Write-Host "  NOTE:   Do NOT close the Wrapper window - it must" -ForegroundColor Yellow
-            Write-Host "          stay open while the app is running." -ForegroundColor Yellow
-            Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host ""
-
-            $appleId  = Read-Host "  Enter your Apple ID (email)"
-            $securePw = Read-Host "  Enter your Apple ID password" -AsSecureString
-            $bstr     = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePw)
-            $plainPw  = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-
-            $loginCmd = "cd '$wslWrapperDir' && ./wrapper -L '${appleId}:${plainPw}' -H 0.0.0.0"
-
-            # Visible window: user interacts with 2FA.
-            # Do NOT kill this process - it IS the serving instance.
-            $wrapperProc = Start-Process -FilePath "wsl" `
-                                         -ArgumentList "-e", "bash", "-c", $loginCmd `
-                                         -WindowStyle Normal `
-                                         -PassThru
-
-            Write-Host ""
-            Write-Host "  Wrapper is starting in the new window." -ForegroundColor Cyan
-            Write-Host "  Approve the 2FA notification on your phone." -ForegroundColor Cyan
-            Write-Host ""
-            Read-Host "  Press Enter here once the Wrapper window shows it is serving"
-
-            if (Test-Path $SessionDB) {
-                Write-Host "  [OK]   Session confirmed (database found)." -ForegroundColor Green
-            } else {
-                Write-Host "  [WARN] Session database not found yet - may still be writing." -ForegroundColor DarkYellow
-            }
-
-            # Verify port 10020 is actually open (the login window should have it open)
-            Write-Host "  Verifying Wrapper port 10020..." -ForegroundColor Gray
-            if (Wait-Port -Port 10020 -Timeout 10) {
-                Write-Host "  [OK]   Wrapper port 10020 is open." -ForegroundColor Green
-                $wrapperStarted = $true
-            } else {
-                Write-Host "  [WARN] Port 10020 not responding. Wrapper may not have started." -ForegroundColor DarkYellow
-                Write-Host "         ALAC/Atmos downloads may not work." -ForegroundColor DarkYellow
-                $wrapperStarted = $false
-            }
-
+        if (-not $wslOk) {
+            Write-Host "  [SKIP] WSL not available. AAC-only mode." -ForegroundColor DarkYellow
         } else {
-            # ── Session exists: start Wrapper in server mode ───
-            Write-Host "  Session found. Starting Wrapper in server mode..." -ForegroundColor Gray
-            $serverCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
+            & wsl bash -c "chmod +x '$wslWrapperDir/wrapper'" 2>$null
 
-            # Start in a NORMAL window first so any startup errors are visible.
-            # We will minimise it after confirming the port is open.
-            $wrapperProc = Start-Process -FilePath "wsl" `
-                                         -ArgumentList "-e", "bash", "-c", $serverCmd `
-                                         -WindowStyle Normal `
-                                         -PassThru
+            if (-not (Test-Path $SessionDB)) {
+                # ── 2c. First-run: interactive Apple ID login ──
+                Write-Host ""
+                Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
+                Write-Host "   First-time Setup: Apple ID Login" -ForegroundColor Yellow
+                Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
+                Write-Host "  1. Enter your Apple ID credentials below." -ForegroundColor White
+                Write-Host "  2. A Wrapper window opens — approve 2FA on your phone." -ForegroundColor White
+                Write-Host "  3. When the Wrapper shows it is serving," -ForegroundColor White
+                Write-Host "     return here and press Enter." -ForegroundColor White
+                Write-Host "  NOTE: Keep the Wrapper window open while the app runs." -ForegroundColor Yellow
+                Write-Host "  -------------------------------------------------------" -ForegroundColor Yellow
+                Write-Host ""
 
-            Write-Host "  Waiting for Wrapper port 10020 (up to 20 seconds)..." -ForegroundColor Gray
-            if (Wait-Port -Port 10020 -Timeout 20) {
-                Write-Host "  [OK]   Wrapper is running on port 10020." -ForegroundColor Green
+                $appleId  = Read-Host "  Apple ID (email)"
+                $securePw = Read-Host "  Apple ID password" -AsSecureString
+                $bstr     = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePw)
+                $plainPw  = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+                [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 
-                # Also wait briefly for port 20020 (M3U8 proxy)
-                if (Wait-Port -Port 20020 -Timeout 10) {
-                    Write-Host "  [OK]   Wrapper M3U8 proxy on port 20020 is ready." -ForegroundColor Green
+                # Use cmd.exe /K so the window stays open and the user can see output.
+                # bash -lc uses a login shell for the full WSL environment.
+                $loginBashCmd = "cd '$wslWrapperDir' && ./wrapper -L '$appleId`:$plainPw' -H 0.0.0.0"
+                $wrapperProc = Start-Process "cmd.exe" `
+                    -ArgumentList "/K", "wsl bash -lc `"$loginBashCmd`"" `
+                    -WindowStyle Normal -PassThru
+
+                Write-Host ""
+                Write-Host "  Wrapper is starting — approve 2FA on your phone." -ForegroundColor Cyan
+                Write-Host ""
+                Read-Host "  Press Enter here once the Wrapper window shows it is serving"
+
+                if (Test-TcpPort "127.0.0.1" 10020) {
+                    Write-Host "  [OK]   Wrapper confirmed on port 10020." -ForegroundColor Green
+                    $wrapperStarted = $true
                 } else {
-                    Write-Host "  [WARN] Port 20020 (M3U8 proxy) not open yet." -ForegroundColor DarkYellow
-                    Write-Host "         ALAC/Atmos may not work." -ForegroundColor DarkYellow
+                    Write-Host "  [WARN] Port 10020 not open — Wrapper may not have started." -ForegroundColor DarkYellow
+                    Write-Host "         ALAC/Atmos downloads will not work." -ForegroundColor DarkYellow
                 }
 
-                $wrapperStarted = $true
             } else {
-                Write-Host "" -ForegroundColor Red
-                Write-Host "  [ERROR] Wrapper failed to start within 20 seconds." -ForegroundColor Red
-                Write-Host "          Check the Wrapper window above for error messages." -ForegroundColor Red
-                Write-Host "          If you see 'Login required', run setup again:" -ForegroundColor Red
-                Write-Host "            python backend\utils\setup_wsl.py" -ForegroundColor White
-                Write-Host ""
-                Write-Host "          AAC downloads will still work without the Wrapper." -ForegroundColor DarkYellow
-                Read-Host "  Press Enter to continue anyway (AAC only)"
-                $wrapperStarted = $false
+                # ── 2d. Session exists: start in server mode ───
+                Write-Host "  Session found — starting Wrapper in server mode..." -ForegroundColor Gray
+
+                # Use cmd.exe /K so the window stays open and errors are visible.
+                # bash -lc uses a login shell for the full WSL environment.
+                $serverBashCmd = "cd '$wslWrapperDir' && ./wrapper -H 0.0.0.0"
+                $wrapperProc = Start-Process "cmd.exe" `
+                    -ArgumentList "/K", "wsl bash -lc `"$serverBashCmd`"" `
+                    -WindowStyle Normal -PassThru
+
+                Write-Host "  Waiting for port 10020 (up to 20 s)..." -ForegroundColor Gray
+                if (Wait-TcpPort "127.0.0.1" 10020 20) {
+                    Write-Host "  [OK]   Port 10020 open." -ForegroundColor Green
+
+                    Write-Host "  Waiting for port 20020 (up to 10 s)..." -ForegroundColor Gray
+                    if (Wait-TcpPort "127.0.0.1" 20020 10) {
+                        Write-Host "  [OK]   Port 20020 open. Wrapper fully ready." -ForegroundColor Green
+                    } else {
+                        Write-Host "  [WARN] Port 20020 not ready yet." -ForegroundColor DarkYellow
+                    }
+                    $wrapperStarted = $true
+                } else {
+                    Write-Host ""
+                    Write-Host "  [ERROR] Wrapper did not start in 20 s." -ForegroundColor Red
+                    Write-Host "          Check the Wrapper window for error messages." -ForegroundColor Red
+                    Write-Host "          Common fix: re-run  python backend\utils\setup_wsl.py" -ForegroundColor White
+                    Write-Host ""
+                    Read-Host "  Press Enter to continue in AAC-only mode"
+                }
             }
         }
     }
 }
 
-# ── Step 3: Launch Backend + Frontend (run_app.py) ─────────────
+# ── Step 3: Launch Backend + Frontend ─────────────────────────
 Write-Host ""
-Write-Host "  [3/3] Launching LingoMusicDownloader (Backend + Frontend)..." -ForegroundColor Yellow
+Write-Host "  [3/3] Launching LingoMusicDownloader..." -ForegroundColor Yellow
 Write-Host ""
 
 $host.UI.RawUI.WindowTitle = "LingoMusicDownloader - Running"
@@ -192,16 +169,13 @@ $env:PYTHONPATH = $ProjectDir
 
 & $VenvPython $RunApp
 
-# ── Cleanup on exit ────────────────────────────────────────────
+# ── Cleanup ────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  Application closed. Cleaning up..." -ForegroundColor Cyan
-
-if ($wrapperStarted -and $wrapperProc -and -not $wrapperProc.HasExited) {
-    Write-Host "  Stopping WSL Wrapper..." -ForegroundColor Gray
-    & wsl -e bash -c "pkill -f './wrapper' 2>/dev/null; true" 2>$null
+if ($wrapperStarted) {
+    & wsl bash -c "pkill -f './wrapper' 2>/dev/null; true" 2>$null
     Write-Host "  [OK]   Wrapper stopped." -ForegroundColor Green
 }
-
 Write-Host ""
 Write-Host "  Goodbye!" -ForegroundColor Cyan
 Start-Sleep -Seconds 2
