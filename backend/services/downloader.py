@@ -137,8 +137,15 @@ class DownloadManager:
             self.download_status[url]["status"] = "processing"
             download_items = []
 
-            async for media in downloader.get_download_item_from_url(url):
-                download_items.append(media)
+            async for item in downloader.get_download_item_from_url(url):
+                # gamdl interface generators yield a *partial* item first
+                # (media.partial=True, final_path=None) as a progress signal,
+                # then the real item once tags/stream_info are populated.
+                # Error items have media.error set.
+                # Only queue items that are fully resolved.
+                if item.final_path is None or item.media.partial or item.media.error:
+                    continue
+                download_items.append(item)
                 self.download_status[url]["items"].append({"status": "pending"})
 
             self.download_status[url]["status"] = "downloading"
