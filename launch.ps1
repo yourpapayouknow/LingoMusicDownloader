@@ -172,10 +172,25 @@ $env:PYTHONPATH = $ProjectDir
 # ── Cleanup ────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  Application closed. Cleaning up..." -ForegroundColor Cyan
-if ($wrapperStarted) {
-    & wsl bash -c "pkill -f './wrapper' 2>/dev/null; true" 2>$null
+
+# Only stop the wrapper if WE started it (not if it was already running).
+if ($wrapperProc -ne $null) {
+    Write-Host "  Stopping WSL Wrapper..." -ForegroundColor Gray
+
+    # 1. Ask WSL to kill the wrapper process gracefully
+    & wsl bash -c "pkill -f 'wrapper' 2>/dev/null; true" 2>$null
+    Start-Sleep -Milliseconds 800
+
+    # 2. Kill the entire cmd.exe process tree (cmd -> wsl.exe -> bash -> wrapper)
+    if (-not $wrapperProc.HasExited) {
+        try {
+            & taskkill /PID $wrapperProc.Id /F /T 2>$null
+        } catch { }
+    }
+
     Write-Host "  [OK]   Wrapper stopped." -ForegroundColor Green
 }
+
 Write-Host ""
 Write-Host "  Goodbye!" -ForegroundColor Cyan
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 1
