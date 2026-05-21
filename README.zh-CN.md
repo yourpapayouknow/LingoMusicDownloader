@@ -1,6 +1,6 @@
 # LingoMusicDownloader
 
-一款功能强大的 Apple Music 桌面下载器，支持 AAC、ALAC 无损和 Dolby Atmos 格式。基于 FastAPI 后端与 Flet 桌面前端构建，通过 WSL2 集成实现高级音频格式支持。
+一款高保真 Apple Music 桌面下载器，采用 **FastAPI 后端** 与 **React + Vite + Tauri 前端** 架构。支持 AAC、ALAC 无损、Dolby/Atmos 能力链路、MV 下载、本地音乐播放、歌词显示，以及可选的自动转码流程。
 
 ---
 
@@ -8,12 +8,14 @@
 
 | 功能 | 说明 |
 |---|---|
-| 🎵 **多种格式** | AAC（标准）、ALAC 无损、Dolby Atmos |
-| 🔍 **内置搜索** | 直接在应用内搜索歌曲、专辑和 MV |
-| 📥 **下载队列** | 实时监控所有下载任务进度 |
-| 🖥️ **桌面 UI** | 通过 Flet 实现的原生桌面窗口 |
-| 🔧 **WSL2 Wrapper** | 集成 WSL2 服务，用于无损与 Atmos 解密 |
-| 🚀 **一键启动** | `launch.ps1` 按正确顺序自动启动全部服务 |
+| 🎵 **多种格式** | AAC、ALAC 无损、Dolby/Atmos 能力链路 |
+| 🎬 **MV 下载** | 支持 Apple Music MV 搜索、下载与本地播放 |
+| 🔍 **内置搜索** | 搜索歌曲、专辑、歌手、歌单与 MV |
+| 📥 **队列与历史** | 实时下载队列 + 专辑分组历史展示 |
+| 🖥️ **桌面应用** | 基于 Tauri 的原生桌面容器（自定义主题 UI） |
+| 🔐 **初始化向导** | 首次协议、Cookies 登录、Wrapper 配置入口 |
+| 🎼 **本地播放** | 本地音频播放、LRC 歌词同步、播放列表管理 |
+| 🔄 **可选转码** | AAC/ALAC 自动转码管线（MP3/MP4/FLAC/WAV） |
 
 ---
 
@@ -21,10 +23,10 @@
 
 - **Windows 10/11**（64 位）
 - **Python 3.10+**
-- **WSL2**（Windows Subsystem for Linux 2）—— 下载 ALAC 无损或 Dolby Atmos 时必需
-  - 安装方式：以管理员身份运行 `wsl --install`
-- **Apple Music 订阅** —— 需要有效的订阅账号
-- **Apple Music Cookie** —— 用于 Apple Music 身份认证
+- **Node.js 18+**（用于前端构建/开发）
+- **Rust toolchain**（仅在你需要自行构建 Tauri 二进制时需要）
+- **Apple Music 订阅** —— 需要有效订阅
+- **WSL2** —— 高规格 Wrapper（ALAC/Atmos/MV）能力所需
 
 ---
 
@@ -41,38 +43,34 @@ cd LingoMusicDownloader
 
 ```powershell
 python -m venv venv
-# 直接通过 venv 中的 pip 安装依赖（无需激活环境）
 .\venv\Scripts\pip install -r backend\requirements.txt
-.\venv\Scripts\pip install -r frontend\requirements.txt
 ```
 
-> **注意**：不要直接运行 `.\venv\Scripts\Activate.ps1`，Windows 默认禁止运行未签名的 PS1 脚本。
-> 如果你希望使用 `activate`，请先执行一次以下命令：
-> ```powershell
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
-
-### 3. 配置 WSL2 Wrapper（仅 ALAC / Atmos 需要）
-
-Wrapper 是一个运行在 WSL2 中的 Linux 二进制程序，通过以下命令下载并配置：
+### 3. 配置前端依赖
 
 ```powershell
-python backend\utils\setup_wsl.py
+cd frontend
+npm install
+cd ..
 ```
 
-此脚本将：
-- 下载 `wrapper` 二进制文件至 `backend\wsl_wrapper\`
-- 通过 WSL2 设置正确的执行权限
+### 4. 准备二进制工具（FFmpeg / mp4decrypt）
 
-> **提示**：如果只需要下载标准 AAC 格式，可跳过此步骤。
+大体积二进制文件默认**不提交到 Git**。
 
-### 4. 创建桌面快捷方式（可选）
+请在本地放置以下文件：
+- `bin/ffmpeg/ffmpeg.exe`
+- `bin/ffmpeg/ffprobe.exe`
+- `bin/ffmpeg/ffplay.exe`
+- `bin/mp4decrypt.exe`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\create_shortcut.ps1
-```
+详细说明见 [bin/README.md](bin/README.md)。
 
-此命令将在桌面创建 **"LingoMusicDownloader"** 快捷方式，方便一键启动。
+### 5. 可选：准备 Wrapper 运行环境（高规格能力）
+
+通过应用内初始化/设置流程安装或重启 Wrapper。
+
+> 若只需要标准 AAC 下载，可不配置 Wrapper。
 
 ---
 
@@ -80,60 +78,61 @@ powershell -ExecutionPolicy Bypass -File .\create_shortcut.ps1
 
 ### 启动应用
 
-**方式 A —— 桌面快捷方式**（推荐）：
-双击桌面上的 **LingoMusicDownloader** 图标。
-
-**方式 B —— 直接运行 PowerShell 脚本**：
+**方式 A —— 启动脚本**（源码运行推荐）：
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\launch.ps1
 ```
 
-**方式 C —— 直接运行 Python**（无 Wrapper）：
+**方式 B —— 手动启动后端 + Tauri 开发模式**：
 ```powershell
-.\venv\Scripts\python.exe run_app.py
+# 终端 1
+.\venv\Scripts\python.exe run_backend.py
+
+# 终端 2
+cd frontend
+npm run tauri dev
 ```
 
-启动器（`launch.ps1`）按以下顺序启动各服务：
-1. **WSL2 Wrapper** —— 在 WSL2 中以最小化窗口启动（端口 10020 / 20020 / 30020）
-2. **FastAPI 后端** —— 作为后台线程启动，监听 `http://127.0.0.1:8000`
-3. **Flet 前端** —— 打开桌面 UI 窗口
+**方式 C —— 运行打包后的可执行文件**：
+使用构建产物 `lingo-music-downloader.exe` 的 release 包。
 
 ---
 
-### 首次使用：配置 Apple Music Cookie
+### 首次使用（应用内初始化向导）
 
-首次启动（或 Cookie 缺失）时，应用会弹出配置对话框：
+首次启动会进入引导流程：
 
-1. 在浏览器中打开 [music.apple.com](https://music.apple.com) 并登录。
-2. 安装 Cookie 导出扩展，例如 [Cookie-Editor](https://cookie-editor.com/)。
-3. 以 **Netscape** 格式导出 Cookie。
-4. 将导出内容粘贴到对话框中，点击 **保存并继续**。
+1. 阅读并同意用户协议/免责声明。
+2. 打开 Apple Music 登录页并完成 Cookies 获取。
+3. 如需高规格能力，继续配置 WSL2 / Wrapper。
 
-Cookie 将保存至项目根目录的 `cookies.txt` 文件中。
+后续也可以在 **设置页** 重新打开初始化入口。
 
 ---
 
 ### 搜索与下载
 
-1. 在搜索框中输入关键词（如 `Taylor Swift Lover`），按 **Enter** 或点击 🔍。
-2. 从下拉菜单中选择所需的**音频编解码器**和 **MV 分辨率**。
-3. 如需下载 ALAC 或 Atmos，请勾选 **"使用 Wrapper（ALAC/Atmos 需要）"**。
-4. 点击结果卡片上的 **Download** 按钮开始下载。
-5. 在右侧**下载队列**面板中监控进度。
+1. 在搜索页检索歌曲/专辑/歌手/MV。
+2. 在设置页选择默认音质与 MV 分辨率。
+3. 提交下载任务并在队列中观察状态。
+4. 下载完成后自动进入历史/本地库索引。
 
-下载的文件保存至项目根目录的 `Apple Music/` 文件夹中。
+默认下载目录：
+- `Apple Music/`
+
+可选转码输出目录：
+- `Converted/`
 
 ---
 
-## 高级格式（ALAC 无损 / Atmos）
+## 高级格式（ALAC / Atmos / MV）
 
-下载无损或 Atmos 内容前：
+若要使用高规格能力：
 
-1. 确保 WSL2 已安装并正常运行。
-2. 运行 `python backend\utils\setup_wsl.py` 下载 Wrapper 二进制。
-3. 通过 `launch.ps1` 启动应用（Wrapper 会自动启动）。
-4. 在应用中从编解码器下拉菜单选择 **ALAC 无损** 或 **Dolby Atmos**。
-5. 下载前勾选 **"使用 Wrapper（ALAC/Atmos 需要）"**。
+1. 确保 WSL2 可用。
+2. 在应用内完成 Wrapper 安装/登录。
+3. 在设置页启用高品质模式。
+4. 若 Wrapper 健康检查失败，下载会直接报错（不再静默降级）。
 
 ---
 
@@ -142,22 +141,21 @@ Cookie 将保存至项目根目录的 `cookies.txt` 文件中。
 ```
 LingoMusicDownloader/
 ├── backend/
-│   ├── api/            # FastAPI 路由定义
-│   ├── core/           # 配置与设置
-│   ├── services/       # 下载管理器（gamdl 集成）
-│   ├── utils/          # WSL 配置、工具下载工具
-│   ├── wsl_wrapper/    # WSL2 Wrapper 二进制（已 git 忽略）
-│   └── main.py         # FastAPI 应用入口
+│   ├── api/              # FastAPI 路由
+│   ├── core/             # 运行时配置
+│   ├── db/               # sqlite + 设置/历史存储
+│   ├── services/         # 下载调度核心
+│   ├── utils/            # 工具脚本
+│   └── main.py           # 后端入口
 ├── frontend/
-│   ├── assets/         # 图标和图片资源
-│   ├── components/     # 可复用 UI 组件
-│   ├── utils/          # API 客户端（向后端发起请求）
-│   ├── views/          # 页面/视图定义
-│   └── main.py         # Flet 应用入口
-├── bin/                # ffmpeg、mp4decrypt 二进制（已 git 忽略）
-├── run_app.py          # 统一入口（后端线程 + 前端）
-├── launch.ps1          # 一键启动脚本（Wrapper → 应用）
-└── create_shortcut.ps1 # 在桌面创建 launch.ps1 的快捷方式
+│   ├── src/              # React 前端源码
+│   ├── src-tauri/        # Tauri Rust 包装层与配置
+│   ├── package.json      # 前端脚本与依赖
+│   └── vite.config.ts    # Vite 构建配置
+├── bin/                  # 本地二进制工具目录（仓库内为占位）
+├── old/                  # 归档的旧版/临时资源
+├── run_backend.py        # 后端启动入口
+└── launch.ps1            # 一体化启动脚本（backend -> desktop app）
 ```
 
 ---
@@ -167,10 +165,10 @@ LingoMusicDownloader/
 | 组件 | 库 |
 |---|---|
 | 后端 API | FastAPI、Uvicorn |
-| 下载器 | [gamdl](https://github.com/WorldObservationLog/gamdl) |
-| 前端 UI | [Flet](https://flet.dev) |
-| HTTP 客户端 | Requests |
-| 配置管理 | Pydantic-Settings |
+| 下载核心 | [gamdl](https://github.com/glomatico/gamdl) |
+| 前端 UI | React、Vite |
+| 桌面容器 | Tauri |
+| 媒体处理 | FFmpeg、mp4decrypt |
 
 ---
 

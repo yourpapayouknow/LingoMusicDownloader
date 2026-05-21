@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Segoe UI', sans-serif;
+}
+
+code,
+pre,
+.ui-mono {
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
+}

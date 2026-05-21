@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         return os.path.join(self.BASE_DIR, "Apple Music")
 
     @property
+    def CONVERTED_PATH(self) -> str:
+        return os.path.join(self.BASE_DIR, "Converted")
+
+    @property
     def BIN_DIR(self) -> str:
         # If frozen, look for bundled bins first
         bundled_bin = os.path.join(self.BUNDLE_DIR, "bin")

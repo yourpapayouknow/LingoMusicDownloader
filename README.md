@@ -1,6 +1,6 @@
 # LingoMusicDownloader
 
-A powerful desktop application for downloading Apple Music tracks in AAC, ALAC Lossless, and Dolby Atmos formats. Built with a FastAPI backend and a Flet desktop frontend, with WSL2 integration for advanced audio formats.
+A high-fidelity Apple Music desktop downloader with a **FastAPI backend** and **React + Vite + Tauri frontend**. It supports AAC, ALAC Lossless, Dolby/Atmos-capable workflows, MV downloads, local library playback, lyrics display, and optional format conversion pipelines.
 
 ---
 
@@ -8,12 +8,14 @@ A powerful desktop application for downloading Apple Music tracks in AAC, ALAC L
 
 | Feature | Details |
 |---|---|
-| 🎵 **Multiple Formats** | AAC (Standard), ALAC Lossless, Dolby Atmos |
-| 🔍 **Built-in Search** | Search songs, albums, and music videos directly in the app |
-| 📥 **Download Queue** | Real-time progress monitoring for all downloads |
-| 🖥️ **Desktop UI** | Native desktop window via Flet |
-| 🔧 **WSL2 Wrapper** | Integrated WSL2-based service for lossless & Atmos decryption |
-| 🚀 **One-Click Launch** | `launch.ps1` starts everything in the correct order |
+| 🎵 **Multiple Formats** | AAC, ALAC Lossless, Dolby/Atmos-capable workflow |
+| 🎬 **MV Download** | Apple Music MV search + download with local playback |
+| 🔍 **Built-in Search** | Search songs, albums, artists, playlists, and MVs |
+| 📥 **Queue + History** | Real-time task queue, grouped album/history display |
+| 🖥️ **Desktop App** | Native desktop shell via Tauri (custom themed UI) |
+| 🔐 **Init Wizard** | First-run agreement, Cookies login, Wrapper setup entrance |
+| 🎼 **Local Playback** | Local file playback, LRC lyric sync, playlist management |
+| 🔄 **Optional Transcode** | AAC/ALAC auto-convert pipeline (MP3/MP4/FLAC/WAV) |
 
 ---
 
@@ -21,10 +23,10 @@ A powerful desktop application for downloading Apple Music tracks in AAC, ALAC L
 
 - **Windows 10/11** (64-bit)
 - **Python 3.10+**
-- **WSL2** — Required for ALAC Lossless and Dolby Atmos downloads
-  - Install via: `wsl --install` in an elevated PowerShell
-- **Apple Music Subscription** — An active subscription is required
-- **Apple Music Cookies** — Used to authenticate with Apple Music
+- **Node.js 18+** (for frontend build/dev)
+- **Rust toolchain** (only needed if you build Tauri binaries yourself)
+- **Apple Music Subscription** — an active subscription is required
+- **WSL2** — required for advanced Wrapper-based ALAC/Atmos/MV capabilities
 
 ---
 
@@ -41,38 +43,34 @@ cd LingoMusicDownloader
 
 ```powershell
 python -m venv venv
-# Install dependencies directly via the venv pip (no activation needed)
 .\venv\Scripts\pip install -r backend\requirements.txt
-.\venv\Scripts\pip install -r frontend\requirements.txt
 ```
 
-> **Note**: Avoid running `.\venv\Scripts\Activate.ps1` directly — Windows blocks unsigned PS1 scripts by default.
-> If you prefer to use `activate`, run this once first:
-> ```powershell
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
-
-### 3. Set Up the WSL2 Wrapper (for ALAC / Atmos)
-
-The wrapper is a Linux binary that runs inside WSL2. Download and configure it by running:
+### 3. Set Up Frontend Dependencies
 
 ```powershell
-python backend\utils\setup_wsl.py
+cd frontend
+npm install
+cd ..
 ```
 
-This will:
-- Download the `wrapper` binary into `backend\wsl_wrapper\`
-- Set the correct execute permissions via WSL2
+### 4. Prepare Binary Tools (FFmpeg / mp4decrypt)
 
-> **Note**: Skip this step if you only need standard AAC downloads.
+Large binaries are intentionally **not committed** to Git.
 
-### 4. Create the Desktop Shortcut (Optional)
+Place these files locally:
+- `bin/ffmpeg/ffmpeg.exe`
+- `bin/ffmpeg/ffprobe.exe`
+- `bin/ffmpeg/ffplay.exe`
+- `bin/mp4decrypt.exe`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\create_shortcut.ps1
-```
+See [bin/README.md](bin/README.md) for details.
 
-This creates a **"LingoMusicDownloader"** shortcut on your Desktop for one-click launch.
+### 5. Optional: Prepare Wrapper Runtime (Advanced Quality)
+
+Use the app's initialization/setup flow to install or restart Wrapper.
+
+> If you only need standard AAC downloads, Wrapper is optional.
 
 ---
 
@@ -80,60 +78,61 @@ This creates a **"LingoMusicDownloader"** shortcut on your Desktop for one-click
 
 ### Launching the Application
 
-**Option A — Desktop Shortcut** (recommended):
-Double-click **LingoMusicDownloader** on your Desktop.
-
-**Option B — PowerShell script directly**:
+**Option A — Script launcher** (recommended for source-run):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\launch.ps1
 ```
 
-**Option C — Python directly** (no wrapper):
+**Option B — Start backend + run Tauri dev manually**:
 ```powershell
-.\venv\Scripts\python.exe run_app.py
+# Terminal 1
+.\venv\Scripts\python.exe run_backend.py
+
+# Terminal 2
+cd frontend
+npm run tauri dev
 ```
 
-The launcher (`launch.ps1`) starts services in this order:
-1. **WSL2 Wrapper** — Started in a minimised window in WSL2 (ports 10020 / 20020 / 30020)
-2. **FastAPI Backend** — Started as a background thread on `http://127.0.0.1:8000`
-3. **Flet Frontend** — The desktop UI window
+**Option C — Run packaged executable**:
+Use a built `lingo-music-downloader.exe` release package.
 
 ---
 
-### First-Time Setup: Apple Music Cookies
+### First-Time Setup (In-App Wizard)
 
-On first launch (or if cookies are missing), a dialog will appear:
+On first launch, the app shows a guided initialization flow:
 
-1. Open [music.apple.com](https://music.apple.com) in your browser and log in.
-2. Install a cookie export extension such as [Cookie-Editor](https://cookie-editor.com/).
-3. Export cookies in **Netscape** format.
-4. Paste the exported content into the dialog and click **Save & Continue**.
+1. Read and accept the user agreement/disclaimer.
+2. Open Apple Music login page and complete Cookies acquisition.
+3. Configure WSL2 / Wrapper if high-quality features are needed.
 
-The cookies are saved to `cookies.txt` in the project root.
+The wizard can also be reopened from **Settings**.
 
 ---
 
 ### Search & Download
 
-1. Type a search term (e.g., `Taylor Swift Lover`) and press **Enter** or click 🔍.
-2. Select the desired **Audio Codec** and **MV Resolution** from the dropdowns.
-3. If downloading ALAC or Atmos, tick **"Use Wrapper (For ALAC/Atmos)"**.
-4. Click **Download** on any result card.
-5. Monitor progress in the **Download Queue** panel on the right.
+1. Search songs/albums/artists/MVs from the Search tab.
+2. Choose codec and MV resolution from Settings.
+3. Submit tasks and monitor queue progress.
+4. Downloaded content is indexed into history/local library.
 
-Downloaded files are saved to the `Apple Music/` folder in the project root.
+Default download output:
+- `Apple Music/`
+
+Optional converted output:
+- `Converted/`
 
 ---
 
-## Advanced Formats (ALAC / Atmos)
+## Advanced Formats (ALAC / Atmos / MV)
 
-For lossless or Atmos content:
+For advanced-quality workflows:
 
-1. Ensure WSL2 is installed and running.
-2. Run `python backend\utils\setup_wsl.py` to download the wrapper binary.
-3. Launch the app via `launch.ps1` (the wrapper starts automatically).
-4. In the app, select **ALAC Lossless** or **Dolby Atmos** from the codec dropdown.
-5. Check **"Use Wrapper (For ALAC/Atmos)"** before downloading.
+1. Ensure WSL2 is available.
+2. Complete Wrapper setup/login in the app.
+3. Enable high-quality mode in Settings.
+4. If Wrapper is not healthy, download submission will fail fast (no silent downgrade).
 
 ---
 
@@ -142,22 +141,21 @@ For lossless or Atmos content:
 ```
 LingoMusicDownloader/
 ├── backend/
-│   ├── api/            # FastAPI route definitions
-│   ├── core/           # Settings / configuration
-│   ├── services/       # Download manager (gamdl integration)
-│   ├── utils/          # WSL setup, tool downloader utilities
-│   ├── wsl_wrapper/    # WSL2 wrapper binary (git-ignored)
-│   └── main.py         # FastAPI application entry point
+│   ├── api/              # FastAPI routes
+│   ├── core/             # runtime settings/config
+│   ├── db/               # sqlite + settings/history storage
+│   ├── services/         # downloader/orchestration logic
+│   ├── utils/            # helper scripts/tools
+│   └── main.py           # backend app entry
 ├── frontend/
-│   ├── assets/         # Icons and images
-│   ├── components/     # Reusable UI components
-│   ├── utils/          # API client (requests to backend)
-│   ├── views/          # Page/view definitions
-│   └── main.py         # Flet application entry point
-├── bin/                # ffmpeg, mp4decrypt binaries (git-ignored)
-├── run_app.py          # Unified entry point (backend thread + frontend)
-├── launch.ps1          # One-click launcher (Wrapper → App)
-└── create_shortcut.ps1 # Creates a Desktop shortcut for launch.ps1
+│   ├── src/              # React app source
+│   ├── src-tauri/        # Tauri Rust wrapper + config
+│   ├── package.json      # frontend scripts/deps
+│   └── vite.config.ts    # Vite build config
+├── bin/                  # local binary tools (placeholders tracked)
+├── old/                  # archived legacy/temporary assets
+├── run_backend.py        # backend launcher
+└── launch.ps1            # unified launcher (backend -> desktop app)
 ```
 
 ---
@@ -167,10 +165,10 @@ LingoMusicDownloader/
 | Component | Library |
 |---|---|
 | Backend API | FastAPI, Uvicorn |
-| Downloader | [gamdl](https://github.com/WorldObservationLog/gamdl) |
-| Frontend UI | [Flet](https://flet.dev) |
-| HTTP Client | Requests |
-| Settings | Pydantic-Settings |
+| Downloader Core | [gamdl](https://github.com/glomatico/gamdl) |
+| Frontend UI | React, Vite |
+| Desktop Shell | Tauri |
+| Media Processing | FFmpeg, mp4decrypt |
 
 ---
 
