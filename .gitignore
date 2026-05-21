@@ -23,10 +23,18 @@ dist/
 # Project Specific
 cookies.txt
 Apple\ Music/
+Apple Music/
+Converted/
+data/
 bin/
 *.log
+backend_live.*
+frontend_live.*
+backend_test.*
+backend.log
 flet_screen*.png
 test_*.py
+__pycache__/
 
 # WSL Wrapper Binaries/Rootfs
 backend/wsl_wrapper/rootfs/
@@ -42,3 +50,26 @@ backend/wsl_wrapper/entrypoint.sh
 # wrapper_setup.bat
 # start.bat
 # run_wsl_wrapper.bat
+
+# Archived legacy artifacts (kept locally only)
+old/build/
+old/dist/
+old/logs/
+old/iwmeiUI_temp/.git/
+old/**/__pycache__/
+frontend/src-tauri/target/
+frontend/dist/
+release_artifacts/
+backend_crash.log
+
+# Keep lightweight placeholders for large binary directories
+bin/*
+!bin/.gitkeep
+!bin/README.md
+!bin/ffmpeg/
+bin/ffmpeg/*
+!bin/ffmpeg/.gitkeep
+!bin/ffmpeg/README.md
+backend/wsl_wrapper/*
+!backend/wsl_wrapper/.gitkeep
+!backend/wsl_wrapper/README.md
