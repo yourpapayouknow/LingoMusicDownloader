@@ -1,52 +1,52 @@
 # LingoMusicDownloader
 
-A high-fidelity Apple Music desktop downloader with a **FastAPI backend** and **React + Vite + Tauri frontend**. It supports AAC, ALAC Lossless, Dolby/Atmos-capable workflows, MV downloads, local library playback, lyrics display, and optional format conversion pipelines.
+一款高保真 Apple Music 桌面下载器，采用 **FastAPI 后端** 与 **React + Vite + Tauri 前端** 架构。支持 AAC、ALAC 无损、Dolby/Atmos 能力链路、MV 下载、本地音乐播放、歌词显示，以及可选的自动转码流程。
 
 ---
 
-## Features
+## 功能特性
 
-| Feature | Details |
+| 功能 | 说明 |
 |---|---|
-| 🎵 **Multiple Formats** | AAC, ALAC Lossless, Dolby/Atmos-capable workflow |
-| 🎬 **MV Download** | Apple Music MV search + download with local playback |
-| 🔍 **Built-in Search** | Search songs, albums, artists, playlists, and MVs |
-| 📥 **Queue + History** | Real-time task queue, grouped album/history display |
-| 🖥️ **Desktop App** | Native desktop shell via Tauri (custom themed UI) |
-| 🔐 **Init Wizard** | First-run agreement, Cookies login, Wrapper setup entrance |
-| 🎼 **Local Playback** | Local file playback, LRC lyric sync, playlist management |
-| 🔄 **Optional Transcode** | AAC/ALAC auto-convert pipeline (MP3/MP4/FLAC/WAV) |
+| 🎵 **多种格式** | AAC、ALAC 无损、Dolby/Atmos 能力链路 |
+| 🎬 **MV 下载** | 支持 Apple Music MV 搜索、下载与本地播放 |
+| 🔍 **内置搜索** | 搜索歌曲、专辑、歌手、歌单与 MV |
+| 📥 **队列与历史** | 实时下载队列 + 专辑分组历史展示 |
+| 🖥️ **桌面应用** | 基于 Tauri 的原生桌面容器（自定义主题 UI） |
+| 🔐 **初始化向导** | 首次协议、Cookies 登录、Wrapper 配置入口 |
+| 🎼 **本地播放** | 本地音频播放、LRC 歌词同步、播放列表管理 |
+| 🔄 **可选转码** | AAC/ALAC 自动转码管线（MP3/MP4/FLAC/WAV） |
 
 ---
 
-## Prerequisites
+## 环境要求
 
-- **Windows 10/11** (64-bit)
+- **Windows 10/11**（64 位）
 - **Python 3.10+**
-- **Node.js 18+** (for frontend build/dev)
-- **Rust toolchain** (only needed if you build Tauri binaries yourself)
-- **Apple Music Subscription** — an active subscription is required
-- **WSL2** — required for advanced Wrapper-based ALAC/Atmos/MV capabilities
+- **Node.js 18+**（用于前端构建/开发）
+- **Rust toolchain**（仅在你需要自行构建 Tauri 二进制时需要）
+- **Apple Music 订阅** —— 需要有效订阅
+- **WSL2** —— 高规格 Wrapper（ALAC/Atmos/MV）能力所需
 
 ---
 
-## Installation
+## 安装步骤
 
-### 1. Clone the Repository
+### 1. 克隆仓库
 
 ```bash
 git clone https://github.com/yourpapayouknow/LingoMusicDownloader.git
 cd LingoMusicDownloader
 ```
 
-### 2. Set Up Python Virtual Environment
+### 2. 配置 Python 虚拟环境
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\pip install -r backend\requirements.txt
 ```
 
-### 3. Set Up Frontend Dependencies
+### 3. 配置前端依赖
 
 ```powershell
 cd frontend
@@ -54,124 +54,124 @@ npm install
 cd ..
 ```
 
-### 4. Prepare Binary Tools (FFmpeg / mp4decrypt)
+### 4. 准备二进制工具（FFmpeg / mp4decrypt）
 
-Large binaries are intentionally **not committed** to Git.
+大体积二进制文件默认**不提交到 Git**。
 
-Place these files locally:
+请在本地放置以下文件：
 - `bin/ffmpeg/ffmpeg.exe`
 - `bin/ffmpeg/ffprobe.exe`
 - `bin/ffmpeg/ffplay.exe`
 - `bin/mp4decrypt.exe`
 
-See [bin/README.md](bin/README.md) for details.
+详细说明见 [bin/README.md](bin/README.md)。
 
-### 5. Optional: Prepare Wrapper Runtime (Advanced Quality)
+### 5. 可选：准备 Wrapper 运行环境（高规格能力）
 
-Use the app's initialization/setup flow to install or restart Wrapper.
+通过应用内初始化/设置流程安装或重启 Wrapper。
 
-> If you only need standard AAC downloads, Wrapper is optional.
+> 若只需要标准 AAC 下载，可不配置 Wrapper。
 
 ---
 
-## Usage
+## 使用方法
 
-### Launching the Application
+### 启动应用
 
-**Option A — Script launcher** (recommended for source-run):
+**方式 A —— 启动脚本**（源码运行推荐）：
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\launch.ps1
 ```
 
-**Option B — Start backend + run Tauri dev manually**:
+**方式 B —— 手动启动后端 + Tauri 开发模式**：
 ```powershell
-# Terminal 1
+# 终端 1
 .\venv\Scripts\python.exe run_backend.py
 
-# Terminal 2
+# 终端 2
 cd frontend
 npm run tauri dev
 ```
 
-**Option C — Run packaged executable**:
-Use a built `lingo-music-downloader.exe` release package.
+**方式 C —— 运行打包后的可执行文件**：
+使用构建产物 `lingo-music-downloader.exe` 的 release 包。
 
 ---
 
-### First-Time Setup (In-App Wizard)
+### 首次使用（应用内初始化向导）
 
-On first launch, the app shows a guided initialization flow:
+首次启动会进入引导流程：
 
-1. Read and accept the user agreement/disclaimer.
-2. Open Apple Music login page and complete Cookies acquisition.
-3. Configure WSL2 / Wrapper if high-quality features are needed.
+1. 阅读并同意用户协议/免责声明。
+2. 打开 Apple Music 登录页并完成 Cookies 获取。
+3. 如需高规格能力，继续配置 WSL2 / Wrapper。
 
-The wizard can also be reopened from **Settings**.
+后续也可以在 **设置页** 重新打开初始化入口。
 
 ---
 
-### Search & Download
+### 搜索与下载
 
-1. Search songs/albums/artists/MVs from the Search tab.
-2. Choose codec and MV resolution from Settings.
-3. Submit tasks and monitor queue progress.
-4. Downloaded content is indexed into history/local library.
+1. 在搜索页检索歌曲/专辑/歌手/MV。
+2. 在设置页选择默认音质与 MV 分辨率。
+3. 提交下载任务并在队列中观察状态。
+4. 下载完成后自动进入历史/本地库索引。
 
-Default download output:
+默认下载目录：
 - `Apple Music/`
 
-Optional converted output:
+可选转码输出目录：
 - `Converted/`
 
 ---
 
-## Advanced Formats (ALAC / Atmos / MV)
+## 高级格式（ALAC / Atmos / MV）
 
-For advanced-quality workflows:
+若要使用高规格能力：
 
-1. Ensure WSL2 is available.
-2. Complete Wrapper setup/login in the app.
-3. Enable high-quality mode in Settings.
-4. If Wrapper is not healthy, download submission will fail fast (no silent downgrade).
+1. 确保 WSL2 可用。
+2. 在应用内完成 Wrapper 安装/登录。
+3. 在设置页启用高品质模式。
+4. 若 Wrapper 健康检查失败，下载会直接报错（不再静默降级）。
 
 ---
 
-## Project Structure
+## 项目结构
 
 ```
 LingoMusicDownloader/
 ├── backend/
-│   ├── api/              # FastAPI routes
-│   ├── core/             # runtime settings/config
-│   ├── db/               # sqlite + settings/history storage
-│   ├── services/         # downloader/orchestration logic
-│   ├── utils/            # helper scripts/tools
-│   └── main.py           # backend app entry
+│   ├── api/              # FastAPI 路由
+│   ├── core/             # 运行时配置
+│   ├── db/               # sqlite + 设置/历史存储
+│   ├── services/         # 下载调度核心
+│   ├── utils/            # 工具脚本
+│   └── main.py           # 后端入口
 ├── frontend/
-│   ├── src/              # React app source
-│   ├── src-tauri/        # Tauri Rust wrapper + config
-│   ├── package.json      # frontend scripts/deps
-│   └── vite.config.ts    # Vite build config
-├── bin/                  # local binary tools (placeholders tracked)
-├── old/                  # archived legacy/temporary assets
-├── run_backend.py        # backend launcher
-└── launch.ps1            # unified launcher (backend -> desktop app)
+│   ├── src/              # React 前端源码
+│   ├── src-tauri/        # Tauri Rust 包装层与配置
+│   ├── package.json      # 前端脚本与依赖
+│   └── vite.config.ts    # Vite 构建配置
+├── bin/                  # 本地二进制工具目录（仓库内为占位）
+├── old/                  # 归档的旧版/临时资源
+├── run_backend.py        # 后端启动入口
+└── launch.ps1            # 一体化启动脚本（backend -> desktop app）
 ```
 
 ---
 
-## Dependencies
+## 依赖项
 
-| Component | Library |
+| 组件 | 库 |
 |---|---|
-| Backend API | FastAPI, Uvicorn |
-| Downloader Core | [gamdl](https://github.com/glomatico/gamdl) |
-| Frontend UI | React, Vite |
-| Desktop Shell | Tauri |
-| Media Processing | FFmpeg, mp4decrypt |
+| 后端 API | FastAPI、Uvicorn |
+| 下载核心 | [gamdl](https://github.com/glomatico/gamdl) |
+| 前端 UI | React、Vite |
+| 桌面容器 | Tauri |
+| 媒体处理 | FFmpeg、mp4decrypt |
 
 ---
 
-## License
+## 许可证
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT 许可证 —— 详见 [LICENSE](LICENSE) 文件。
