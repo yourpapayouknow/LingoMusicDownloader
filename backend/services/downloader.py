@@ -407,6 +407,49 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
             ydl.download([m3u8_path.resolve().as_uri()])
 
 
+class LingoAppleMusicSongInterface(AppleMusicSongInterface):
+    """
+    Wrapper's m3u8 helper port (20020) can occasionally return empty lines even
+    when the track exposes lossless streams via enhancedHls.
+    When that happens, upstream interface treats it as format unavailable.
+    We gracefully fallback to enhancedHls to avoid false negatives.
+    """
+
+    async def get_wrapper_m3u8(self, adam_id: str) -> str | None:
+        wrapper_url = await super().get_wrapper_m3u8(adam_id)
+        if wrapper_url:
+            return wrapper_url
+
+        try:
+            song_payload = await self.base.apple_music_api.get_song(adam_id)
+            song_data = (
+                song_payload.get("data", [{}])[0]
+                if isinstance(song_payload, dict)
+                else {}
+            )
+            attributes = song_data.get("attributes", {}) if isinstance(song_data, dict) else {}
+            extended_urls = (
+                attributes.get("extendedAssetUrls", {})
+                if isinstance(attributes, dict)
+                else {}
+            )
+            fallback_url = extended_urls.get("enhancedHls")
+            if fallback_url:
+                logger.warning(
+                    "Wrapper m3u8 returned empty for media_id=%s; fallback to enhancedHls",
+                    adam_id,
+                )
+                return fallback_url
+        except Exception as e:
+            logger.warning(
+                "Failed to fallback enhancedHls for media_id=%s: %s",
+                adam_id,
+                e,
+            )
+
+        return None
+
+
 def _safe_attr(obj: Any, attr_name: str, default: Any = None) -> Any:
     if obj is None:
         return default
@@ -547,7 +590,7 @@ class DownloadManager:
         except ValueError:
             video_res_enum = MusicVideoResolution.R1080P
 
-        song_interface = AppleMusicSongInterface(
+        song_interface = LingoAppleMusicSongInterface(
             base=base_interface,
             codec_priority=[song_codec_enum]
         )
@@ -609,32 +652,73 @@ class DownloadManager:
     async def _process_url(self, downloader, url: str):
         try:
             self.download_status[url]["status"] = "processing"
-            download_items = []
+            download_queue: List[Dict[str, Any]] = []
+            preflight_error_items: List[Dict[str, Any]] = []
 
             async for item in downloader.get_download_item_from_url(url):
                 # Check for errors yielding from the downloader interface first
                 if item.media.error:
-                    raise item.media.error
+                    error_obj = item.media.error
+                    error_message = str(error_obj) or "Unknown media resolution error"
+                    logger.warning("Skip unresolved media item from interface: %s", error_message)
+
+                    # Keep album/playlist progress usable even when some tracks do not
+                    # expose the requested codec (for example partial ALAC availability).
+                    if isinstance(error_obj, GamdlInterfaceFormatNotAvailableError):
+                        hint = "该曲目不提供当前音质，已跳过并继续下载其他曲目。"
+                    elif isinstance(error_obj, GamdlApiResponseError):
+                        hint = _get_api_error_hint(error_obj.status_code)
+                    else:
+                        hint = "该曲目解析失败，已跳过并继续下载其他曲目。"
+
+                    error_meta = _extract_media_metadata(item, url)
+                    error_item = {
+                        "status": "error",
+                        "track_id": error_meta["track_id"],
+                        "name": error_meta["name"],
+                        "artist_name": error_meta["artist_name"],
+                        "album_name": error_meta["album_name"],
+                        "artwork_url": error_meta["artwork_url"],
+                        "file_path": "",
+                        "error": error_message,
+                        "hint": hint,
+                    }
+                    preflight_error_items.append(error_item)
+                    self.download_status[url]["items"].append(error_item)
+                    continue
                 
                 # gamdl interface generators yield a *partial* item first
                 # (media.partial=True, final_path=None) as a progress signal.
                 # Only queue items that are fully resolved.
                 if item.final_path is None or item.media.partial:
                     continue
-                download_items.append(item)
                 meta = _extract_media_metadata(item, url)
                 self.download_status[url]["items"].append({
                     "status": "pending",
                     "track_id": meta["track_id"],
                     "name": meta["name"],
                 })
+                status_index = len(self.download_status[url]["items"]) - 1
+                download_queue.append({
+                    "item": item,
+                    "status_index": status_index,
+                })
 
-            if not download_items:
+            if not download_queue:
+                if preflight_error_items:
+                    self.download_status[url]["status"] = "error"
+                    self.download_status[url]["error"] = preflight_error_items[0].get("error") or "No downloadable tracks found."
+                    return
                 raise ValueError("No downloadable tracks/videos found. The URL might be invalid or restricted.")
 
             self.download_status[url]["status"] = "downloading"
 
-            for index, item in enumerate(download_items):
+            for queued in download_queue:
+                item = queued["item"]
+                index = queued["status_index"]
+                if index >= len(self.download_status[url]["items"]):
+                    logger.error("Download item index out of range: %s", index)
+                    continue
                 self.download_status[url]["items"][index]["status"] = "downloading"
                 try:
                     await downloader.download(item)
@@ -682,11 +766,30 @@ class DownloadManager:
                     self.download_status[url]["items"][index]["status"] = "error"
                     self.download_status[url]["items"][index]["error"] = str(e)
 
-            # Check if any items in the queue failed. If so, set overall status to error.
-            any_error = any(item.get("status") == "error" for item in self.download_status[url]["items"])
-            if any_error:
+            # Defensive finalization: no child should remain pending/downloading
+            # once the queue loop has completed.
+            for child in self.download_status[url]["items"]:
+                if child.get("status") in {"pending", "downloading"}:
+                    child["status"] = "error"
+                    if not child.get("error"):
+                        child["error"] = "Download did not finish for this item."
+
+            # Keep task usable for albums/playlists with partial availability:
+            # if at least one item completed, mark the task completed.
+            items = self.download_status[url]["items"]
+            completed_count = sum(1 for child in items if child.get("status") == "completed")
+            error_count = sum(1 for child in items if child.get("status") == "error")
+            if completed_count > 0:
+                self.download_status[url]["status"] = "completed"
+                if error_count > 0:
+                    self.download_status[url]["warning"] = f"{error_count} track(s) skipped or failed."
+                    for child in items:
+                        if child.get("status") == "error" and child.get("error"):
+                            self.download_status[url]["error"] = child.get("error")
+                            break
+            elif error_count > 0:
                 self.download_status[url]["status"] = "error"
-                for child in self.download_status[url]["items"]:
+                for child in items:
                     if child.get("status") == "error" and child.get("error"):
                         self.download_status[url]["error"] = child.get("error")
                         break
