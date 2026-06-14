@@ -7,10 +7,13 @@ import re
 import shutil
 import tempfile
 import unicodedata
+from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.request import Request, urlopen
+
+import httpx
 
 from backend.db.database import insert_history, get_all_settings
 
@@ -53,6 +56,91 @@ SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV = "lingomusic-transcode-alac-to-wav"
 SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4 = "lingomusic-transcode-alac-to-mp4"
 
 TRANSCODE_TRUE_VALUES = {"1", "true", "yes", "on"}
+APPLE_MUSIC_HOMEPAGE_URL = "https://music.apple.com"
+APPLE_MUSIC_INDEX_SCRIPT_REGEX = re.compile(
+    r"/(assets/index(?:-legacy)?[~-][^/\"']+\.js)"
+)
+APPLE_MUSIC_JWT_REGEX = re.compile(
+    r'"(eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)"'
+)
+
+
+def _load_media_user_token_from_cookies(cookies_path: str) -> str:
+    cookies = MozillaCookieJar(cookies_path)
+    cookies.load(ignore_discard=True, ignore_expires=True)
+
+    for cookie in cookies:
+        if cookie.name != "media-user-token":
+            continue
+        domain = (cookie.domain or "").strip().lower()
+        if "music.apple.com" in domain:
+            return cookie.value
+
+    raise ValueError(
+        '"media-user-token" cookie not found in cookies. '
+        "Make sure Apple Music web login is complete."
+    )
+
+
+async def _fetch_apple_music_access_tokens() -> List[str]:
+    response = None
+    async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
+        try:
+            response = await client.get(APPLE_MUSIC_HOMEPAGE_URL)
+            response.raise_for_status()
+            home_page = response.text
+        except httpx.HTTPError as e:
+            raise RuntimeError(
+                "Error fetching Apple Music homepage for access token"
+            ) from e
+
+        script_matches = APPLE_MUSIC_INDEX_SCRIPT_REGEX.findall(home_page)
+        if not script_matches:
+            raise RuntimeError(
+                "Error finding index.js URI in Apple Music homepage"
+            )
+
+        seen_scripts = set()
+        script_uris: List[str] = []
+        for script_uri in script_matches:
+            if script_uri in seen_scripts:
+                continue
+            seen_scripts.add(script_uri)
+            script_uris.append(script_uri)
+
+        script_uris.sort(key=lambda value: ("legacy" in value, value))
+
+        seen_tokens = set()
+        tokens: List[str] = []
+        for script_uri in script_uris:
+            script_response = None
+            try:
+                script_response = await client.get(
+                    f"{APPLE_MUSIC_HOMEPAGE_URL}/{script_uri}"
+                )
+                script_response.raise_for_status()
+                index_js_page = script_response.text
+            except httpx.HTTPError as e:
+                logger.warning(
+                    "Failed to fetch Apple Music script for token discovery: %s | %s",
+                    script_uri,
+                    e,
+                )
+                continue
+
+            for token in APPLE_MUSIC_JWT_REGEX.findall(index_js_page):
+                if token in seen_tokens:
+                    continue
+                seen_tokens.add(token)
+                tokens.append(token)
+
+            if tokens:
+                break
+
+        if not tokens:
+            raise RuntimeError("Error finding access token in Apple Music script")
+
+        return tokens
 
 def _normalize_codec_label(raw_codec: Optional[str]) -> str:
     value = (raw_codec or "").strip().lower()
@@ -69,6 +157,44 @@ def _normalize_codec_label(raw_codec: Optional[str]) -> str:
         return "aac"
 
     return value
+
+
+def _resolve_song_codec_enum(codec: str):
+    """
+    Keep our frontend-compatible codec values working across gamdl releases.
+    3.5 used AAC_LEGACY/AAC_HE_LEGACY while 3.6+ renamed them to AAC_WEB/AAC_HE_WEB.
+    """
+    requested = (codec or "").strip().lower()
+    alias_map = {
+        "aac-legacy": ("AAC_LEGACY", "AAC_WEB"),
+        "aac-he-legacy": ("AAC_HE_LEGACY", "AAC_HE_WEB"),
+        "aac-web": ("AAC_WEB", "AAC_LEGACY"),
+        "aac-he-web": ("AAC_HE_WEB", "AAC_HE_LEGACY"),
+        "aac": ("AAC",),
+        "aac-he": ("AAC_HE",),
+        "aac-binaural": ("AAC_BINAURAL",),
+        "aac-downmix": ("AAC_DOWNMIX",),
+        "aac-he-binaural": ("AAC_HE_BINAURAL",),
+        "aac-he-downmix": ("AAC_HE_DOWNMIX",),
+        "alac": ("ALAC",),
+        "atmos": ("ATMOS",),
+        "dolby": ("ATMOS",),
+        "ac3": ("AC3",),
+        "ac-3": ("AC3",),
+        "ask": ("ASK",),
+    }
+
+    for attr_name in alias_map.get(requested, (requested.upper().replace("-", "_"),)):
+        codec_enum = getattr(SongCodec, attr_name, None)
+        if codec_enum is not None:
+            return codec_enum
+
+    for fallback_name in ("AAC_WEB", "AAC_LEGACY", "AAC"):
+        codec_enum = getattr(SongCodec, fallback_name, None)
+        if codec_enum is not None:
+            return codec_enum
+
+    raise ValueError(f"Unsupported SongCodec mapping for: {codec}")
 
 
 def _filename_key(value: str) -> str:
@@ -556,20 +682,51 @@ class DownloadManager:
             logger.error(f"Cookies file not found at {settings.COOKIES_PATH}")
             return False
 
+        self.apple_music_api = None
+        self.is_initialized = False
+
         # Ensure WSL Bridge is up
         await ensure_wsl_bridge()
 
         try:
-            self.apple_music_api = await AppleMusicApi.create_from_netscape_cookies(
-                cookies_path=settings.COOKIES_PATH,
-            )
-            
-            if not self.apple_music_api.active_subscription:
-                logger.error("No active Apple Music subscription found.")
-                return False
+            media_user_token = _load_media_user_token_from_cookies(settings.COOKIES_PATH)
+            candidate_tokens = await _fetch_apple_music_access_tokens()
 
-            self.is_initialized = True
-            return True
+            init_errors: List[str] = []
+            for access_token in candidate_tokens:
+                try:
+                    self.apple_music_api = await AppleMusicApi.create(
+                        media_user_token=media_user_token,
+                        token=access_token,
+                    )
+                    if not self.apple_music_api.active_subscription:
+                        init_errors.append("No active Apple Music subscription found.")
+                        self.apple_music_api = None
+                        continue
+
+                    self.is_initialized = True
+                    return True
+                except Exception as token_error:
+                    init_errors.append(str(token_error))
+                    self.apple_music_api = None
+
+            try:
+                self.apple_music_api = await AppleMusicApi.create_from_wrapper()
+                if self.apple_music_api.active_subscription:
+                    logger.info("Initialized Apple Music API via wrapper fallback.")
+                    self.is_initialized = True
+                    return True
+                init_errors.append("Wrapper account has no active Apple Music subscription.")
+                self.apple_music_api = None
+            except Exception as wrapper_error:
+                init_errors.append(f"Wrapper fallback failed: {wrapper_error}")
+                self.apple_music_api = None
+
+            logger.error(
+                "Failed to initialize Gamdl downloader: %s",
+                " | ".join(init_errors[:3]) if init_errors else "Unknown initialization error",
+            )
+            return False
         except Exception as e:
             logger.error(f"Failed to initialize Gamdl downloader: {e}")
             return False
@@ -581,9 +738,9 @@ class DownloadManager:
         )
         
         try:
-            song_codec_enum = SongCodec(codec)
+            song_codec_enum = _resolve_song_codec_enum(codec)
         except ValueError:
-            song_codec_enum = SongCodec.AAC_LEGACY
+            song_codec_enum = _resolve_song_codec_enum("aac-legacy")
             
         try:
             video_res_enum = MusicVideoResolution(video_resolution)
