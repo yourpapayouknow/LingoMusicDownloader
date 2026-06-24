@@ -63,6 +63,7 @@ APPLE_MUSIC_INDEX_SCRIPT_REGEX = re.compile(
 APPLE_MUSIC_JWT_REGEX = re.compile(
     r'"(eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)"'
 )
+ITUNES_LOOKUP_API_URL = "https://itunes.apple.com/lookup"
 LEGACY_WRAPPER_ACCOUNT_URLS = (
     "http://127.0.0.1:30020/",
     "http://127.0.0.1:30020/me",
@@ -168,6 +169,12 @@ def _synthetic_account_info(storefront: str) -> Dict[str, Any]:
     }
 
 
+def _itunes_artwork_template(url: str) -> str:
+    if not url:
+        return ""
+    return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
+
+
 async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:
     errors: List[str] = []
     async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
@@ -186,6 +193,89 @@ async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:
             errors.append(f"{account_url}: unexpected payload type {type(payload).__name__}")
 
     raise RuntimeError("Legacy wrapper account endpoint unavailable: " + " | ".join(errors))
+
+
+async def _get_music_video_metadata_from_itunes(
+    music_video_id: str,
+    storefront: str,
+) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        response = await client.get(
+            ITUNES_LOOKUP_API_URL,
+            params={
+                "id": music_video_id,
+                "country": storefront,
+                "entity": "musicVideo",
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    results = payload.get("results", []) if isinstance(payload, dict) else []
+    raw_item = next(
+        (
+            item
+            for item in results
+            if isinstance(item, dict)
+            and str(item.get("trackId") or "") == str(music_video_id)
+            and item.get("kind") == "music-video"
+        ),
+        None,
+    )
+    if not raw_item:
+        raise RuntimeError(f"iTunes lookup did not return music video metadata for {music_video_id}.")
+
+    artwork_url = _itunes_artwork_template(
+        raw_item.get("artworkUrl100") or raw_item.get("artworkUrl60") or ""
+    )
+    return {
+        "data": [
+            {
+                "id": str(raw_item["trackId"]),
+                "type": "music-videos",
+                "href": f"/v1/catalog/{storefront}/music-videos/{raw_item['trackId']}",
+                "attributes": {
+                    "name": raw_item.get("trackCensoredName") or raw_item.get("trackName") or "",
+                    "artistName": raw_item.get("artistName") or "",
+                    "url": raw_item.get("trackViewUrl") or f"https://music.apple.com/{storefront}/music-video/{raw_item['trackId']}",
+                    "artwork": {
+                        "url": artwork_url,
+                        "width": 100,
+                        "height": 100,
+                    },
+                    "genreNames": [raw_item.get("primaryGenreName")] if raw_item.get("primaryGenreName") else [],
+                    "releaseDate": str(raw_item.get("releaseDate") or "").split("T", 1)[0],
+                    "playParams": {
+                        "id": str(raw_item["trackId"]),
+                        "kind": "musicVideo",
+                        "catalogId": str(raw_item["trackId"]),
+                    },
+                    "previews": ([{"url": raw_item.get("previewUrl")}] if raw_item.get("previewUrl") else []),
+                },
+            }
+        ],
+        "meta": {"source": "itunes-lookup-fallback"},
+    }
+
+
+def _install_legacy_music_video_metadata_fallback(api: AppleMusicApi) -> None:
+    original_get_music_video = api.get_music_video
+
+    async def get_music_video_with_itunes_fallback(music_video_id: str):
+        try:
+            return await original_get_music_video(music_video_id)
+        except Exception as e:
+            logger.warning(
+                "Apple Music MV metadata lookup failed, falling back to iTunes lookup: %s: %s",
+                type(e).__name__,
+                e,
+            )
+            return await _get_music_video_metadata_from_itunes(
+                music_video_id,
+                api.storefront,
+            )
+
+    api.get_music_video = get_music_video_with_itunes_fallback
 
 
 async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
@@ -216,6 +306,7 @@ async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
     api.account_info = _synthetic_account_info(api.storefront)
     api._lingo_legacy_wrapper_fallback = True
     api.client.headers.update({"cookie": f"media-user-token={media_user_token}"})
+    _install_legacy_music_video_metadata_fallback(api)
     return api
 
 def _normalize_codec_label(raw_codec: Optional[str]) -> str:
