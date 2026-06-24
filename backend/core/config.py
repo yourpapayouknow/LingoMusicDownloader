@@ -37,11 +37,22 @@ class Settings(BaseSettings):
 
     @property
     def BIN_DIR(self) -> str:
-        # If frozen, look for bundled bins first
-        bundled_bin = os.path.join(self.BUNDLE_DIR, "bin")
-        if os.path.exists(bundled_bin):
-            return bundled_bin
-        return os.path.join(self.BASE_DIR, "bin")
+        candidates = [
+            os.path.join(self.BUNDLE_DIR, "bin"),
+            os.path.join(self.BASE_DIR, "bin"),
+        ]
+
+        base_name = os.path.basename(self.BASE_DIR)
+        if base_name.endswith("_legacy"):
+            sibling_name = base_name[:-len("_legacy")]
+            sibling_dir = os.path.join(os.path.dirname(self.BASE_DIR), sibling_name)
+            candidates.append(os.path.join(sibling_dir, "bin"))
+
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                return candidate
+
+        return candidates[0]
     
     @property
     def FFMPEG_PATH(self) -> str:
