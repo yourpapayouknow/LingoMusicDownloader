@@ -42,12 +42,6 @@ class Settings(BaseSettings):
             os.path.join(self.BASE_DIR, "bin"),
         ]
 
-        base_name = os.path.basename(self.BASE_DIR)
-        if base_name.endswith("_legacy"):
-            sibling_name = base_name[:-len("_legacy")]
-            sibling_dir = os.path.join(os.path.dirname(self.BASE_DIR), sibling_name)
-            candidates.append(os.path.join(sibling_dir, "bin"))
-
         for candidate in candidates:
             if os.path.exists(candidate):
                 return candidate
