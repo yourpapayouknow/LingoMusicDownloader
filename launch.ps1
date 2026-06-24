@@ -33,6 +33,13 @@ $LegacyWrapperBinary = Join-Path $LegacyWrapperDir "wrapper"
 $LegacyWrapperLinker = Join-Path $LegacyWrapperDir "rootfs\system\bin\linker64"
 $PrimaryWrapperBinary = Join-Path $PrimaryWrapperDir "wrapper"
 $PrimaryWrapperLinker = Join-Path $PrimaryWrapperDir "rootfs\system\bin\linker64"
+$LegacyBinDir = Join-Path $ProjectDir "bin"
+$PrimaryBinDir = Join-Path $PrimaryProjectDir "bin"
+$LegacyMp4Decrypt = Join-Path $LegacyBinDir "mp4decrypt.exe"
+$LegacyFfmpeg = Join-Path $LegacyBinDir "ffmpeg\ffmpeg.exe"
+$PrimaryMp4Decrypt = Join-Path $PrimaryBinDir "mp4decrypt.exe"
+$PrimaryFfmpegDir = Join-Path $PrimaryBinDir "ffmpeg"
+$PrimaryFfmpeg = Join-Path $PrimaryFfmpegDir "ffmpeg.exe"
 $LegacyCookies = Join-Path $ProjectDir "cookies.txt"
 $PrimaryCookies = Join-Path $PrimaryProjectDir "cookies.txt"
 
@@ -131,6 +138,25 @@ function Ensure-LegacyWrapperAssets {
     New-Item -ItemType Directory -Force -Path $LegacyWrapperDir | Out-Null
     Copy-Item (Join-Path $PrimaryWrapperDir "*") $LegacyWrapperDir -Recurse -Force
     Write-Host "  [OK] Legacy Wrapper runtime synced." -ForegroundColor Green
+}
+
+function Ensure-LegacyBinaryAssets {
+    $binsReady = (Test-Path $LegacyMp4Decrypt) -and (Test-Path $LegacyFfmpeg)
+    if ($binsReady) {
+        return
+    }
+
+    $primaryReady = (Test-Path $PrimaryMp4Decrypt) -and (Test-Path $PrimaryFfmpeg)
+    if (-not $primaryReady) {
+        Write-Host "  [WARN] Legacy binary tools are missing, and no shared local copy was found." -ForegroundColor DarkYellow
+        Write-Host "         Please place mp4decrypt.exe and ffmpeg under: $LegacyBinDir" -ForegroundColor DarkYellow
+        return
+    }
+
+    Write-Host "  [INFO] Syncing binary tools into the legacy workspace..." -ForegroundColor Gray
+    New-Item -ItemType Directory -Force -Path $LegacyBinDir | Out-Null
+    Copy-Item (Join-Path $PrimaryBinDir "*") $LegacyBinDir -Recurse -Force
+    Write-Host "  [OK] Binary tools synced into legacy bin." -ForegroundColor Green
 }
 
 function Ensure-FrontendDependencies {
@@ -257,6 +283,7 @@ if (-not (Test-Path $BackendEntry)) {
 Ensure-LegacyPythonEnv
 Ensure-LegacyCookies
 Ensure-LegacyWrapperAssets
+Ensure-LegacyBinaryAssets
 Ensure-FrontendDependencies
 
 Write-Host "  [1/2] Checking backend (http://127.0.0.1:8000)..." -ForegroundColor Yellow
