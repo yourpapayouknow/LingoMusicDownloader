@@ -49,6 +49,7 @@ FAST_SEARCH_TYPES = "songs,albums,artists,music-videos,playlists"
 FAST_SEARCH_LIMIT = 50
 FAST_SEARCH_TIMEOUT_SECONDS = 12.0
 FAST_SEARCH_DIRECT_TIMEOUT_SECONDS = 8.0
+ITUNES_SEARCH_TIMEOUT_SECONDS = 10.0
 SEARCH_CACHE_TTL_SECONDS = 45.0
 SEARCH_CACHE_STALE_SECONDS = 600.0
 SEARCH_CACHE_MAX_ENTRIES = 60
@@ -2193,6 +2194,147 @@ def _save_cached_search(term: str, limit: int, payload: Dict[str, Any]) -> None:
     _prune_search_cache(now_ts)
 
 
+def _itunes_artwork_template(url: str) -> str:
+    if not url:
+        return ""
+    return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
+
+
+def _itunes_song_to_search_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    track_id = item.get("trackId")
+    if not track_id:
+        return None
+    return {
+        "id": str(track_id),
+        "type": "songs",
+        "attributes": {
+            "name": item.get("trackName") or item.get("trackCensoredName") or "",
+            "artistName": item.get("artistName") or "",
+            "albumName": item.get("collectionName") or item.get("collectionCensoredName") or "",
+            "url": item.get("trackViewUrl") or item.get("collectionViewUrl") or "",
+            "artwork": {
+                "url": _itunes_artwork_template(item.get("artworkUrl100") or item.get("artworkUrl60") or ""),
+                "width": 100,
+                "height": 100,
+            },
+            "previews": ([{"url": item.get("previewUrl")}] if item.get("previewUrl") else []),
+        },
+    }
+
+
+def _itunes_album_to_search_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    collection_id = item.get("collectionId")
+    if not collection_id:
+        return None
+    return {
+        "id": str(collection_id),
+        "type": "albums",
+        "attributes": {
+            "name": item.get("collectionName") or item.get("collectionCensoredName") or "",
+            "artistName": item.get("artistName") or "",
+            "url": item.get("collectionViewUrl") or "",
+            "artwork": {
+                "url": _itunes_artwork_template(item.get("artworkUrl100") or item.get("artworkUrl60") or ""),
+                "width": 100,
+                "height": 100,
+            },
+        },
+    }
+
+
+def _itunes_artist_to_search_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    artist_id = item.get("artistId")
+    if not artist_id:
+        return None
+    return {
+        "id": str(artist_id),
+        "type": "artists",
+        "attributes": {
+            "name": item.get("artistName") or "",
+            "artistName": item.get("artistName") or "",
+            "url": item.get("artistLinkUrl") or "",
+            "artwork": {"url": "", "width": 100, "height": 100},
+        },
+    }
+
+
+def _itunes_music_video_to_search_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    track_id = item.get("trackId")
+    if not track_id:
+        return None
+    return {
+        "id": str(track_id),
+        "type": "music-videos",
+        "attributes": {
+            "name": item.get("trackName") or item.get("trackCensoredName") or "",
+            "artistName": item.get("artistName") or "",
+            "url": item.get("trackViewUrl") or "",
+            "artwork": {
+                "url": _itunes_artwork_template(item.get("artworkUrl100") or item.get("artworkUrl60") or ""),
+                "width": 100,
+                "height": 100,
+            },
+            "previews": ([{"url": item.get("previewUrl")}] if item.get("previewUrl") else []),
+        },
+    }
+
+
+async def _search_catalog_itunes_fallback(term: str, limit: int) -> Dict[str, Any]:
+    storefront = "cn"
+    language = "zh_cn"
+    if manager.apple_music_api:
+        storefront = manager.apple_music_api.storefront or storefront
+        language = manager.apple_music_api.language or language
+
+    entity_specs = {
+        "songs": ("song", _itunes_song_to_search_item),
+        "albums": ("album", _itunes_album_to_search_item),
+        "artists": ("musicArtist", _itunes_artist_to_search_item),
+        "music-videos": ("musicVideo", _itunes_music_video_to_search_item),
+    }
+    per_entity_limit = max(1, min(limit, 25))
+
+    async with httpx.AsyncClient(timeout=ITUNES_SEARCH_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        async def fetch_entity(entity: str) -> Dict[str, Any]:
+            response = await client.get(
+                "https://itunes.apple.com/search",
+                params={
+                    "term": term,
+                    "country": storefront,
+                    "media": "music",
+                    "entity": entity,
+                    "limit": per_entity_limit,
+                    "lang": language,
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload if isinstance(payload, dict) else {}
+
+        payloads = await asyncio.gather(
+            *(fetch_entity(entity) for entity, _ in entity_specs.values()),
+        )
+
+    results: Dict[str, Dict[str, Any]] = {
+        "songs": {"data": []},
+        "albums": {"data": []},
+        "artists": {"data": []},
+        "music-videos": {"data": []},
+        "playlists": {"data": []},
+    }
+    for (category, (_, converter)), payload in zip(entity_specs.items(), payloads):
+        converted: List[Dict[str, Any]] = []
+        for raw_item in payload.get("results", []) if isinstance(payload, dict) else []:
+            if not isinstance(raw_item, dict):
+                continue
+            item = converter(raw_item)
+            if item:
+                converted.append(item)
+        results[category]["data"] = converted
+
+    return {"results": results}
+
+
 async def _search_catalog_direct(term: str, limit: int) -> Dict[str, Any]:
     global _search_http_client
 
@@ -2256,23 +2398,46 @@ async def _search_catalog_fast(term: str, limit: int = FAST_SEARCH_LIMIT) -> Dic
 
     async def _fetch() -> Dict[str, Any]:
         try:
+            if getattr(manager.apple_music_api, "_lingo_legacy_wrapper_fallback", False):
+                payload = await _search_catalog_itunes_fallback(term, safe_limit)
+                _save_cached_search(term, safe_limit, payload)
+                return payload
+
             # Direct AMP request is usually faster and avoids large debug payload logging.
             try:
                 payload = await _search_catalog_direct(term, safe_limit)
             except Exception as direct_error:
                 logger.warning(
-                    "Direct AMP search failed, falling back to gamdl path: %s",
+                    "Direct AMP search failed, falling back to gamdl path: %s: %s",
+                    type(direct_error).__name__,
                     direct_error,
                 )
-                payload = await asyncio.wait_for(
-                    manager.apple_music_api.get_search_results(
-                        term,
-                        types=FAST_SEARCH_TYPES,
-                        limit=safe_limit,
-                        offset=0,
-                    ),
-                    timeout=FAST_SEARCH_TIMEOUT_SECONDS,
-                )
+                if isinstance(direct_error, (httpx.ConnectError, httpx.TimeoutException)):
+                    logger.warning(
+                        "Skipping gamdl search because AMP transport is unavailable; using iTunes search fallback."
+                    )
+                    payload = await _search_catalog_itunes_fallback(term, safe_limit)
+                    if not isinstance(payload, dict):
+                        raise RuntimeError("Apple Music search returned invalid payload")
+                    _save_cached_search(term, safe_limit, payload)
+                    return payload
+                try:
+                    payload = await asyncio.wait_for(
+                        manager.apple_music_api.get_search_results(
+                            term,
+                            types=FAST_SEARCH_TYPES,
+                            limit=safe_limit,
+                            offset=0,
+                        ),
+                        timeout=FAST_SEARCH_TIMEOUT_SECONDS,
+                    )
+                except Exception as gamdl_error:
+                    logger.warning(
+                        "gamdl Apple Music search failed, falling back to iTunes search: %s: %s",
+                        type(gamdl_error).__name__,
+                        gamdl_error,
+                    )
+                    payload = await _search_catalog_itunes_fallback(term, safe_limit)
 
             if not isinstance(payload, dict):
                 raise RuntimeError("Apple Music search returned invalid payload")

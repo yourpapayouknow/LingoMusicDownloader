@@ -63,6 +63,14 @@ APPLE_MUSIC_INDEX_SCRIPT_REGEX = re.compile(
 APPLE_MUSIC_JWT_REGEX = re.compile(
     r'"(eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)"'
 )
+LEGACY_WRAPPER_ACCOUNT_URLS = (
+    "http://127.0.0.1:30020/",
+    "http://127.0.0.1:30020/me",
+)
+APPLE_STOREFRONT_ID_MAP = {
+    "143465": "cn",
+    "143441": "us",
+}
 
 
 def _load_media_user_token_from_cookies(cookies_path: str) -> str:
@@ -141,6 +149,74 @@ async def _fetch_apple_music_access_tokens() -> List[str]:
             raise RuntimeError("Error finding access token in Apple Music script")
 
         return tokens
+
+
+def _storefront_from_legacy_wrapper(value: Any) -> str:
+    storefront_id = str(value or "").split(",", 1)[0].split("-", 1)[0].strip()
+    return APPLE_STOREFRONT_ID_MAP.get(storefront_id, "cn")
+
+
+def _synthetic_account_info(storefront: str) -> Dict[str, Any]:
+    return {
+        "data": [],
+        "meta": {
+            "subscription": {
+                "active": True,
+                "storefront": storefront,
+            },
+        },
+    }
+
+
+async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:
+    errors: List[str] = []
+    async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
+        for account_url in LEGACY_WRAPPER_ACCOUNT_URLS:
+            try:
+                response = await client.get(account_url)
+                response.raise_for_status()
+                payload = response.json()
+            except Exception as e:
+                errors.append(f"{account_url}: {e}")
+                continue
+
+            if isinstance(payload, dict):
+                return payload
+
+            errors.append(f"{account_url}: unexpected payload type {type(payload).__name__}")
+
+    raise RuntimeError("Legacy wrapper account endpoint unavailable: " + " | ".join(errors))
+
+
+async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
+    wrapper_account_info = await _fetch_legacy_wrapper_account_info()
+    auth_info = wrapper_account_info.get("auth") if isinstance(wrapper_account_info.get("auth"), dict) else {}
+
+    media_user_token = (
+        wrapper_account_info.get("music_token")
+        or auth_info.get("music_user_token")
+    )
+    dev_token = (
+        wrapper_account_info.get("dev_token")
+        or auth_info.get("dev_token")
+    )
+    if not media_user_token or not dev_token:
+        raise RuntimeError("Legacy wrapper account info is missing music/dev tokens.")
+
+    storefront = (
+        wrapper_account_info.get("storefront")
+        or auth_info.get("storefront")
+        or _storefront_from_legacy_wrapper(wrapper_account_info.get("storefront_id"))
+    )
+    api = await AppleMusicApi.create(
+        storefront=storefront,
+        token=dev_token,
+    )
+    api.media_user_token = media_user_token
+    api.account_info = _synthetic_account_info(api.storefront)
+    api._lingo_legacy_wrapper_fallback = True
+    api.client.headers.update({"cookie": f"media-user-token={media_user_token}"})
+    return api
 
 def _normalize_codec_label(raw_codec: Optional[str]) -> str:
     value = (raw_codec or "").strip().lower()
@@ -711,9 +787,12 @@ class DownloadManager:
                     self.apple_music_api = None
 
             try:
-                self.apple_music_api = await AppleMusicApi.create_from_wrapper()
+                self.apple_music_api = await _create_apple_music_api_from_legacy_wrapper()
                 if self.apple_music_api.active_subscription:
-                    logger.info("Initialized Apple Music API via wrapper fallback.")
+                    logger.warning(
+                        "Initialized Apple Music API via legacy wrapper fallback. "
+                        "Apple account subscription probe was unavailable; continuing with wrapper tokens."
+                    )
                     self.is_initialized = True
                     return True
                 init_errors.append("Wrapper account has no active Apple Music subscription.")
