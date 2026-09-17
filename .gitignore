@@ -73,3 +73,7 @@ bin/ffmpeg/*
 backend/wsl_wrapper/*
 !backend/wsl_wrapper/.gitkeep
 !backend/wsl_wrapper/README.md
+
+# Local session artifacts
+history/
+startclaude.ps1
