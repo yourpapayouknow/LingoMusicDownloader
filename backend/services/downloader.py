@@ -42,6 +42,10 @@ from gamdl.interface import (
     SongCodec,
     MusicVideoResolution
 )
+from gamdl.interface.constants import MP4_FORMAT_CODECS
+from gamdl.interface.types import StreamInfo, StreamInfoAv
+from gamdl.interface.enums import MediaFileFormat
+import m3u8
 from yt_dlp import YoutubeDL
 
 from backend.core.config import settings
@@ -56,6 +60,11 @@ SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV = "lingomusic-transcode-alac-to-wav"
 SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4 = "lingomusic-transcode-alac-to-mp4"
 
 TRANSCODE_TRUE_VALUES = {"1", "true", "yes", "on"}
+# HLS 分片的 codecs 字段用 MP4A 对象类型标识，音频资产元数据用简写标识
+AUDIO_FORMAT_ID_BY_CODEC = {
+    "mp4a.40.2": "aac",
+    "mp4a.40.5": "aach",
+}
 APPLE_MUSIC_HOMEPAGE_URL = "https://music.apple.com"
 APPLE_MUSIC_INDEX_SCRIPT_REGEX = re.compile(
     r"/(assets/index(?:-legacy)?[~-][^/\"']+\.js)"
@@ -707,6 +716,143 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
     When that happens, upstream interface treats it as format unavailable.
     We gracefully fallback to enhancedHls to avoid false negatives.
     """
+
+    @staticmethod
+    def _resolve_asset_metadata(
+        asset_metadata: Dict[str, Any],
+        playlist: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        # 按 stable_variant_id 取音频资产元数据，取不到时退回按音频编码匹配
+        stable_variant_id = playlist["stream_info"].get("stable_variant_id")
+        if stable_variant_id is not None:
+            entry = asset_metadata.get(stable_variant_id)
+            if entry is not None:
+                return entry
+
+        codec_tag = (playlist["stream_info"].get("codecs") or "").strip()
+        asset_tag = AUDIO_FORMAT_ID_BY_CODEC.get(codec_tag, codec_tag)
+        if not asset_tag:
+            return None
+
+        candidates = [
+            entry
+            for entry in asset_metadata.values()
+            if (entry.get("AUDIO-FORMAT-ID") or "").strip() == asset_tag
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+
+        # 同编码多条时用码率与分片带宽互相印证，无法唯一定位则不猜
+        if len(candidates) > 1:
+            bandwidth = playlist["stream_info"].get("average_bandwidth") or 0
+            ranked = [
+                entry
+                for entry in candidates
+                if entry.get("BIT-RATE") and entry["BIT-RATE"] <= bandwidth
+            ]
+            if ranked:
+                return max(ranked, key=lambda entry: entry["BIT-RATE"])
+
+        return None
+
+    async def _get_stream_info(
+        self,
+        song_metadata: dict,
+        codec: SongCodec,
+    ) -> StreamInfoAv | None:
+        """
+        Apple 的 HLS 主播放列表用短 opaque id 作 stable_variant_id，而
+        audioAssetMetadata 的键是 SHA-256 摘要，上游直接下标取值会抛 KeyError，
+        被当成"格式不可用"导致整张专辑失败。这里在取值处改用兜底匹配。
+        """
+        if "extendedAssetUrls" not in song_metadata["attributes"]:
+            song_metadata = (
+                await self.base.apple_music_api.get_song(
+                    self.base.parse_catalog_media_id(song_metadata),
+                )
+            )["data"][0]
+
+        m3u8_master_url = (
+            await self.get_wrapper_m3u8(self.base.parse_catalog_media_id(song_metadata))
+            if self.base.use_wrapper
+            else song_metadata["attributes"]["extendedAssetUrls"].get("enhancedHls")
+        )
+        if not m3u8_master_url:
+            return None
+
+        m3u8_master_obj = m3u8.loads(
+            (await self.base.get_response(m3u8_master_url)).text
+        )
+        m3u8_master_data = m3u8_master_obj.data
+
+        if codec == SongCodec.ASK:
+            playlist = await self._get_playlist_from_user(m3u8_master_data)
+        else:
+            playlist = self._get_playlist_from_codec(m3u8_master_data, codec)
+
+        if playlist is None:
+            logger.debug("no_matching_playlist", codec=codec.value)
+            return None
+
+        stream_info = StreamInfo(legacy=False)
+        stream_info.stream_url = (
+            f"{m3u8_master_url.rpartition('/')[0]}/{playlist['uri']}"
+        )
+        stream_info.codec = playlist["stream_info"]["codecs"]
+        is_mp4 = any(stream_info.codec.startswith(codec) for codec in MP4_FORMAT_CODECS)
+
+        session_key_metadata = self._get_audio_session_key_metadata(m3u8_master_data)
+
+        if session_key_metadata:
+            asset_metadata = self._get_asset_metadata(m3u8_master_data)
+            asset_entry = self._resolve_asset_metadata(asset_metadata, playlist)
+            if asset_entry is None:
+                raise KeyError(
+                    "No audio asset metadata matches variant: "
+                    f"{playlist['stream_info'].get('stable_variant_id')}"
+                )
+
+            drm_ids = asset_entry["AUDIO-SESSION-KEY-IDS"]
+
+            stream_info.widevine_pssh = self._get_drm_uri_from_session_key(
+                session_key_metadata,
+                drm_ids,
+                "urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed",
+            )
+            stream_info.playready_pssh = self._get_drm_uri_from_session_key(
+                session_key_metadata,
+                drm_ids,
+                "com.microsoft.playready",
+            )
+            stream_info.fairplay_key = self._get_drm_uri_from_session_key(
+                session_key_metadata,
+                drm_ids,
+                "com.apple.streamingkeydelivery",
+            )
+        else:
+            m3u8_obj = m3u8.loads(
+                (await self.base.get_response(stream_info.stream_url)).text
+            )
+
+            stream_info.widevine_pssh = self._get_drm_uri_from_m3u8_keys(
+                m3u8_obj,
+                "urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed",
+            )
+            stream_info.playready_pssh = self._get_drm_uri_from_m3u8_keys(
+                m3u8_obj,
+                "com.microsoft.playready",
+            )
+            stream_info.fairplay_key = self._get_drm_uri_from_m3u8_keys(
+                m3u8_obj,
+                "com.apple.streamingkeydelivery",
+            )
+
+        stream_info_av = StreamInfoAv(
+            audio_track=stream_info,
+            file_format=MediaFileFormat.MP4 if is_mp4 else MediaFileFormat.M4A,
+        )
+        logger.debug("get_song_stream_info success", stream_info=stream_info_av)
+        return stream_info_av
 
     async def get_wrapper_m3u8(self, adam_id: str) -> str | None:
         wrapper_url = await super().get_wrapper_m3u8(adam_id)
