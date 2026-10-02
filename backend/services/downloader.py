@@ -24,6 +24,8 @@ from gamdl.interface.exceptions import (
 )
 
 from gamdl.api import AppleMusicApi
+from gamdl.api.constants import APPLE_MUSIC_AMP_API_URL
+from httpx_retries import Retry, RetryTransport
 from gamdl.downloader import (
     AppleMusicBaseDownloader,
     AppleMusicDownloader,
@@ -287,6 +289,44 @@ def _install_legacy_music_video_metadata_fallback(api: AppleMusicApi) -> None:
     api.get_music_video = get_music_video_with_itunes_fallback
 
 
+def _configure_proxy_aware_client(api: AppleMusicApi) -> None:
+    """
+    httpx.AsyncClient with RetryTransport sets allow_env_proxies=False,
+    which ignores system/environment HTTP proxies (e.g. 10.1.1.1:7897 / 127.0.0.1:7890).
+    This causes amp-api.music.apple.com to hang and timeout in proxy environments.
+    We detect the underlying proxy transport from a clean AsyncClient and wrap it
+    with RetryTransport, ensuring both proxy support and retries work properly.
+    """
+    try:
+        temp_client = httpx.AsyncClient()
+        target_transport = None
+        for pattern, trans in temp_client._mounts.items():
+            if trans and pattern.matches(httpx.URL(APPLE_MUSIC_AMP_API_URL)):
+                target_transport = trans
+                break
+        if target_transport is None:
+            target_transport = temp_client._transport
+
+        retry_transport = RetryTransport(
+            transport=target_transport,
+            retry=Retry(
+                total=6,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+            ),
+        )
+        headers = dict(api.client.headers)
+        if api.media_user_token and "cookie" not in headers:
+            headers["cookie"] = f"media-user-token={api.media_user_token}"
+        api.client = httpx.AsyncClient(
+            headers=headers,
+            transport=retry_transport,
+            timeout=30.0,
+        )
+    except Exception as e:
+        logger.warning("Failed to configure proxy-aware client for AppleMusicApi: %s", e)
+
+
 async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
     wrapper_account_info = await _fetch_legacy_wrapper_account_info()
     auth_info = wrapper_account_info.get("auth") if isinstance(wrapper_account_info.get("auth"), dict) else {}
@@ -315,6 +355,7 @@ async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
     api.account_info = _synthetic_account_info(api.storefront)
     api._lingo_legacy_wrapper_fallback = True
     api.client.headers.update({"cookie": f"media-user-token={media_user_token}"})
+    _configure_proxy_aware_client(api)
     _install_legacy_music_video_metadata_fallback(api)
     return api
 
@@ -1012,6 +1053,7 @@ class DownloadManager:
                         media_user_token=media_user_token,
                         token=access_token,
                     )
+                    _configure_proxy_aware_client(self.apple_music_api)
                     if not self.apple_music_api.active_subscription:
                         init_errors.append("No active Apple Music subscription found.")
                         self.apple_music_api = None
