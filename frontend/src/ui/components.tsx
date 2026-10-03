@@ -1,13 +1,16 @@
+// 业务高阶UI交互组件库
 import {
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
-  type ButtonHTMLAttributes,
   type CSSProperties,
-  type InputHTMLAttributes,
   type ReactNode,
+} from '../head'
+import {
+  useId,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
@@ -16,6 +19,7 @@ import { Box, HStack, Icon, Text, VStack, cx } from './primitives'
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
+// 基础操作按钮组件
 export function Button({
   className,
   variant = 'primary',

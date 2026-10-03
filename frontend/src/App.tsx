@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+// 前端主应用单页容器与各视图聚合交互组件
+import { useCallback, useEffect, useRef, useState } from './head'
 import logoImage from './assets/lingomusiclogo.png'
 import './app.css'
 import { useTheme } from './theme/ThemeProvider'
@@ -1167,11 +1168,11 @@ export default function App() {
     
     // Fetch Settings
     getSettingsApi().then(settings => {
-      if (settings[SETTINGS_KEY_CODEC]) setCodec(settings[SETTINGS_KEY_CODEC])
-      if (settings[SETTINGS_KEY_RESOLUTION]) setResolution(settings[SETTINGS_KEY_RESOLUTION])
+      if (settings[SETTINGS_KEY_CODEC]) setCodec(String(settings[SETTINGS_KEY_CODEC]))
+      if (settings[SETTINGS_KEY_RESOLUTION]) setResolution(String(settings[SETTINGS_KEY_RESOLUTION]))
       if (settings[SETTINGS_KEY_USE_WRAPPER] !== undefined) setUseWrapper(settings[SETTINGS_KEY_USE_WRAPPER] === 'true' || settings[SETTINGS_KEY_USE_WRAPPER] === true)
       if (settings[SETTINGS_KEY_VOLUME]) {
-        const v = parseFloat(settings[SETTINGS_KEY_VOLUME])
+        const v = parseFloat(String(settings[SETTINGS_KEY_VOLUME]))
         setVolume(v)
         setIsMuted(v === 0)
       }

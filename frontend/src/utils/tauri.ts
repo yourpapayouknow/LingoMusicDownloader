@@ -1,41 +1,4 @@
-// Tauri helper utilities
-
-export function minimizeWindow() {
-  if (isTauri()) {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-      getCurrentWindow().minimize().catch(console.error)
-    })
-  } else {
-    console.log('Tauri minimize window (mock)')
-  }
-}
-
-export function maximizeWindow() {
-  if (isTauri()) {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-      getCurrentWindow().toggleMaximize().catch(console.error)
-    })
-  } else {
-    console.log('Tauri toggle maximize window (mock)')
-  }
-}
-
-export function closeWindow() {
-  if (isTauri()) {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-      getCurrentWindow().close().catch(console.error)
-    })
-  } else {
-    console.log('Tauri close window (mock)')
-  }
-}
-
-export function isTauri(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
-}
-
-const APPLE_MUSIC_LOGIN_URL = 'https://music.apple.com/cn/new'
-
+// Tauri原生窗口与独立登录WebView管理器
 export interface AppleMusicLoginWindowSession {
   label: string
   close: () => Promise<void>
@@ -56,10 +19,56 @@ export interface OpenAppleMusicLoginOptions {
   onError?: (message: string) => void
 }
 
-export async function openAppleMusicLoginWindow(
+const APPLE_MUSIC_LOGIN_URL = 'https://music.apple.com/cn/new'
+
+
+// 判断当前运行环境是否为Tauri原生应用
+export function istri(): boolean {
+  return typeof window !== 'undefined' && !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+}
+
+
+// 最小化当前原生窗口
+export function minwin(): void {
+  if (istri()) {
+    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+      getCurrentWindow().minimize().catch(console.error)
+    })
+  } else {
+    console.log('Tauri minimize window (mock)')
+  }
+}
+
+
+// 最大化或还原当前原生窗口
+export function maxwin(): void {
+  if (istri()) {
+    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+      getCurrentWindow().toggleMaximize().catch(console.error)
+    })
+  } else {
+    console.log('Tauri toggle maximize window (mock)')
+  }
+}
+
+
+// 关闭当前原生窗口
+export function clswin(): void {
+  if (istri()) {
+    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+      getCurrentWindow().close().catch(console.error)
+    })
+  } else {
+    console.log('Tauri close window (mock)')
+  }
+}
+
+
+// 创建并打开Apple Music登录独立WebView窗口
+export async function opnapllgn(
   options: OpenAppleMusicLoginOptions = {}
 ): Promise<AppleMusicLoginWindowSession | null> {
-  if (!isTauri()) return null
+  if (!istri()) return null
 
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
   const label = `apple-login-${Date.now()}`
@@ -88,8 +97,6 @@ export async function openAppleMusicLoginWindow(
       resolve(value)
     }
 
-    // Some runtimes may miss the synthetic created event timing.
-    // Use a short timeout fallback to avoid hanging the login flow forever.
     const timeoutId = window.setTimeout(() => {
       safeResolve({ ok: true })
     }, 1800)
@@ -103,7 +110,7 @@ export async function openAppleMusicLoginWindow(
     })
     loginWindow.once('tauri://error', (event) => {
       window.clearTimeout(timeoutId)
-      const payload = (event as any)?.payload
+      const payload = (event as { payload?: unknown })?.payload
       safeResolve({
         ok: false,
         message: typeof payload === 'string' ? payload : '登录窗口创建失败',
@@ -131,10 +138,12 @@ export async function openAppleMusicLoginWindow(
   }
 }
 
-export async function probeAppleMusicLoginWindowCookies(
+
+// 检测登录窗口WebView中的Apple认证Cookies
+export async function prbapllgn(
   windowLabel: string
 ): Promise<AppleMusicLoginProbeResult> {
-  if (!isTauri()) {
+  if (!istri()) {
     return {
       success: false,
       message: '当前环境不支持内置登录窗口 Cookie 检测',
@@ -150,3 +159,12 @@ export async function probeAppleMusicLoginWindowCookies(
     windowLabel,
   })
 }
+
+
+// 兼容性别名导出
+export const isTauri = istri
+export const minimizeWindow = minwin
+export const maximizeWindow = maxwin
+export const closeWindow = clswin
+export const openAppleMusicLoginWindow = opnapllgn
+export const probeAppleMusicLoginWindowCookies = prbapllgn

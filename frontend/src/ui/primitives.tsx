@@ -1,13 +1,17 @@
+// 基础UI原子布局组件与设计系统样式容器
 import {
-  forwardRef,
   useState,
   type CSSProperties,
+  type ReactNode,
+} from '../head'
+import {
+  forwardRef,
   type ComponentPropsWithoutRef,
   type ElementType,
   type ImgHTMLAttributes,
-  type ReactNode,
 } from 'react'
 
+// 组合与过滤类名字符串
 export function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
@@ -18,7 +22,8 @@ type SpaceValue = SpaceToken | number | string
 
 type RadiusValue = RadiusToken | number | string
 
-function resolveSpace(space?: SpaceValue): string | undefined {
+// 解析设计系统间距令牌
+function rslvspc(space?: SpaceValue): string | undefined {
   if (space === undefined) {
     return undefined
   }
@@ -34,7 +39,8 @@ function resolveSpace(space?: SpaceValue): string | undefined {
   return space
 }
 
-function resolveRadius(radius?: RadiusValue): string | undefined {
+// 解析设计系统圆角令牌
+function rslvrds(radius?: RadiusValue): string | undefined {
   if (radius === undefined) {
     return undefined
   }
@@ -49,6 +55,9 @@ function resolveRadius(radius?: RadiusValue): string | undefined {
 
   return radius
 }
+
+const resolveSpace = rslvspc
+const resolveRadius = rslvrds
 
 type BoxProps<T extends ElementType = 'div'> = {
   as?: T
