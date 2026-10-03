@@ -2,7 +2,7 @@
 from backend.head import (
     APIRouter, HTTPException, BaseModel, Optional, List, Dict, Any,
     os, time, json, sqlite3, tempfile, Path, re, base64, shutil, ctypes,
-    logging, asyncio
+    logging, asyncio, AES
 )
 from backend.core.config import settings
 from backend.services.downloader import manager
@@ -166,7 +166,6 @@ def dcryptchrmck(raw_value: str, encrypted_value: bytes, master_key: Optional[by
     prefix = encrypted_value[:3]
     if prefix in {b"v10", b"v11", b"v20"} and master_key and len(encrypted_value) > 31:
         try:
-            from Crypto.Cipher import AES
             nonce = encrypted_value[3:15]
             ciphertext = encrypted_value[15:-16]
             tag = encrypted_value[-16:]

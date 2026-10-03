@@ -1,21 +1,15 @@
 # 终端独立运行的WSL与Wrapper向导部署实用工具
-from backend.head import os, subprocess, urllib, zipfile
-from backend.core.config import settings
+from backend.head import subprocess, getpass
+from backend.api.routes_wsl import dtctwsl
+from backend.api.routes_wrapper import (
+    rslvwrprdir, rslvwrprdb, wntowslpth, ensrwrprinst
+)
 
 
 # 检查WSL是否已安装并且可在系统中调用
 def chkwslinst() -> bool:
-    try:
-        subprocess.run(
-            ["wsl", "--status"],
-            capture_output=True,
-            timeout=15,
-        )
-        return True
-    except FileNotFoundError:
-        return False
-    except subprocess.TimeoutExpired:
-        return True
+    installed, _ = dtctwsl()
+    return installed
 
 
 # 打印引导用户安装WSL2的提示说明
@@ -43,45 +37,14 @@ def stwrprwsl() -> None:
         return
 
     print("[OK] WSL is available.")
-    base_dir = settings.bsdir()
-    wrapper_dir = os.path.join(base_dir, "backend", "wsl_wrapper")
-    os.makedirs(wrapper_dir, exist_ok=True)
-    wrapper_binary = os.path.join(wrapper_dir, "wrapper")
+    wrapper_dir = rslvwrprdir()
+    session_db = rslvwrprdb()
+    wsl_path = wntowslpth(wrapper_dir)
 
-    session_db = os.path.join(
-        wrapper_dir,
-        "rootfs", "data", "data",
-        "com.apple.android.music", "files", "mpl_db", "kvs.sqlitedb",
-    )
-
-    drive = wrapper_dir[0].lower()
-    wsl_path = f"/mnt/{drive}/" + wrapper_dir[3:].replace("\\", "/")
-
-    if not os.path.exists(wrapper_binary):
-        print("Downloading Wrapper binary for WSL...")
-        url = (
-            "https://github.com/WorldObservationLog/wrapper/releases/download/"
-            "wrapper.x86_64.latest/Wrapper.x86_64.latest.zip"
-        )
-        zip_path = os.path.join(wrapper_dir, "wrapper.zip")
-        try:
-            urllib.request.urlretrieve(url, zip_path)
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(wrapper_dir)
-            os.remove(zip_path)
-            print("[OK] Wrapper downloaded successfully.")
-        except Exception as e:
-            print(f"[ERROR] Failed to download wrapper: {e}")
-            return
-    else:
-        print("[OK] Wrapper binary already exists, skipping download.")
-
-    print("Setting execute permissions via WSL...")
-    subprocess.run(
-        ["wsl", "-e", "bash", "-c", f"chmod +x '{wsl_path}/wrapper'"],
-        capture_output=True,
-    )
-    print("[OK] Permissions set.")
+    ok, err = ensrwrprinst()
+    if not ok:
+        print(f"[ERROR] Failed to prepare wrapper: {err}")
+        return
 
     print()
     print("=" * 60)
@@ -96,7 +59,6 @@ def stwrprwsl() -> None:
         print("[CANCELLED] No Apple ID provided. Setup incomplete.")
         return
 
-    import getpass
     password = getpass.getpass("  Password: ").strip()
     if not password:
         print("[CANCELLED] No password provided. Setup incomplete.")
@@ -133,7 +95,7 @@ def stwrprwsl() -> None:
         print(f"[ERROR] Failed to run wrapper: {e}")
         return
 
-    if os.path.exists(session_db):
+    if session_db.exists():
         print()
         print("=" * 60)
         print("  [SUCCESS] Apple Music Wrapper is authenticated and ready!")

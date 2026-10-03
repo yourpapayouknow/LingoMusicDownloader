@@ -1,4 +1,5 @@
 // Tauri原生窗口与独立登录WebView管理器
+import { ldtrwin, ldtrwbvw, ldtrcore } from '../head'
 export interface AppleMusicLoginWindowSession {
   label: string
   close: () => Promise<void>
@@ -31,7 +32,7 @@ export function istri(): boolean {
 // 最小化当前原生窗口
 export function minwin(): void {
   if (istri()) {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+    ldtrwin().then(({ getCurrentWindow }) => {
       getCurrentWindow().minimize().catch(console.error)
     })
   } else {
@@ -43,7 +44,7 @@ export function minwin(): void {
 // 最大化或还原当前原生窗口
 export function maxwin(): void {
   if (istri()) {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+    ldtrwin().then(({ getCurrentWindow }) => {
       getCurrentWindow().toggleMaximize().catch(console.error)
     })
   } else {
@@ -55,7 +56,7 @@ export function maxwin(): void {
 // 关闭当前原生窗口
 export function clswin(): void {
   if (istri()) {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+    ldtrwin().then(({ getCurrentWindow }) => {
       getCurrentWindow().close().catch(console.error)
     })
   } else {
@@ -70,7 +71,7 @@ export async function opnapllgn(
 ): Promise<AppleMusicLoginWindowSession | null> {
   if (!istri()) return null
 
-  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+  const { WebviewWindow } = await ldtrwbvw()
   const label = `apple-login-${Date.now()}`
   const loginWindow = new WebviewWindow(label, {
     title: 'Apple Music 登录',
@@ -154,7 +155,7 @@ export async function prbapllgn(
     }
   }
 
-  const { invoke } = await import('@tauri-apps/api/core')
+  const { invoke } = await ldtrcore()
   return invoke<AppleMusicLoginProbeResult>('probe_apple_music_login_cookies', {
     windowLabel,
   })

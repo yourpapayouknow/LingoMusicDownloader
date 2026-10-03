@@ -184,14 +184,33 @@ export interface WrapperSetupInputResponse {
 }
 
 
-// 请求Apple Music曲库关键词检索
-export async function srchapl(term: string): Promise<SearchResponse> {
-  const res = await fetch(`${BASE_URL}/search?term=${encodeURIComponent(term)}`)
+// 通用JSON请求辅助方法
+async function reqjson<T>(url: string, init?: RequestInit, fallbackMsg: string = 'Request failed'): Promise<T> {
+  const res = await fetch(url, init)
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to search Apple Music')
+    throw new Error((errorData as { detail?: string }).detail || fallbackMsg)
   }
-  return res.json()
+  return res.json() as Promise<T>
+}
+
+// 通用POST JSON请求辅助方法
+function postjson<T>(url: string, body?: unknown, fallbackMsg: string = 'Request failed'): Promise<T> {
+  return reqjson<T>(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    },
+    fallbackMsg
+  )
+}
+
+
+// 请求Apple Music曲库关键词检索
+export async function srchapl(term: string): Promise<SearchResponse> {
+  return reqjson<SearchResponse>(`${BASE_URL}/search?term=${encodeURIComponent(term)}`, undefined, 'Failed to search Apple Music')
 }
 
 
@@ -202,52 +221,29 @@ export async function sbmtdwnld(
   videoResolution: string,
   useWrapper: boolean
 ): Promise<{ message: string; url: string }> {
-  const res = await fetch(`${BASE_URL}/download`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url,
-      codec,
-      video_resolution: videoResolution,
-      use_wrapper: useWrapper,
-    }),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to submit download')
-  }
-  return res.json()
+  return postjson<{ message: string; url: string }>(
+    `${BASE_URL}/download`,
+    { url, codec, video_resolution: videoResolution, use_wrapper: useWrapper },
+    'Failed to submit download'
+  )
 }
 
 
 // 获取下载队列运行状态
 export async function gtstts(): Promise<DownloadStatus> {
-  const res = await fetch(`${BASE_URL}/status`)
-  if (!res.ok) throw new Error('Failed to fetch status')
-  return res.json()
+  return reqjson<DownloadStatus>(`${BASE_URL}/status`, undefined, 'Failed to fetch status')
 }
 
 
 // 获取系统各模块健康探针状态
 export async function gthlth(): Promise<HealthStatus> {
-  const res = await fetch(`${BASE_URL}/health`)
-  if (!res.ok) throw new Error('Failed to fetch health status')
-  return res.json()
+  return reqjson<HealthStatus>(`${BASE_URL}/health`, undefined, 'Failed to fetch health status')
 }
 
 
 // 保存Netscape格式Cookies文本
 export async function svcks(content: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${BASE_URL}/cookies`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to save cookies')
-  }
-  return res.json()
+  return postjson<{ success: boolean; message: string }>(`${BASE_URL}/cookies`, { content }, 'Failed to save cookies')
 }
 
 
@@ -256,16 +252,7 @@ export async function fnllgn(payload: {
   profile_hint?: string
   started_at_ms?: number
 }): Promise<CookieLoginFinalizeResponse> {
-  const res = await fetch(`${BASE_URL}/cookie-login/finalize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to finalize cookie login')
-  }
-  return res.json()
+  return postjson<CookieLoginFinalizeResponse>(`${BASE_URL}/cookie-login/finalize`, payload, 'Failed to finalize cookie login')
 }
 
 
@@ -274,74 +261,47 @@ export async function prblgn(payload: {
   profile_hint?: string
   started_at_ms?: number
 }): Promise<CookieLoginProbeResponse> {
-  const res = await fetch(`${BASE_URL}/cookie-login/probe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to probe cookie login')
-  }
-  return res.json()
+  return postjson<CookieLoginProbeResponse>(`${BASE_URL}/cookie-login/probe`, payload, 'Failed to probe cookie login')
 }
 
 
 // 获取客户端全部设置字典
 export async function gtstngs(): Promise<Record<string, unknown>> {
-  const res = await fetch(`${BASE_URL}/settings`)
-  if (!res.ok) throw new Error('Failed to fetch settings')
-  return res.json()
+  return reqjson<Record<string, unknown>>(`${BASE_URL}/settings`, undefined, 'Failed to fetch settings')
 }
 
 
 // 更新客户端设置配置项
 export async function svstngs(settings: Record<string, unknown>): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/settings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(settings),
-  })
-  if (!res.ok) throw new Error('Failed to save settings')
-  return res.json()
+  return postjson<unknown>(`${BASE_URL}/settings`, settings, 'Failed to save settings')
 }
 
 
 // 获取全量下载历史列表
 export async function gthstry(): Promise<HistoryItem[]> {
-  const res = await fetch(`${BASE_URL}/history`)
-  if (!res.ok) throw new Error('Failed to fetch history')
-  return res.json()
+  return reqjson<HistoryItem[]>(`${BASE_URL}/history`, undefined, 'Failed to fetch history')
 }
 
 
 // 删除指定历史记录
 export async function dlthstry(trackId: string, deleteFile: boolean = false): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/history/${trackId}?delete_file=${deleteFile}`, {
-    method: 'DELETE',
-  })
-  if (!res.ok) throw new Error('Failed to delete history')
-  return res.json()
+  return reqjson<unknown>(
+    `${BASE_URL}/history/${encodeURIComponent(trackId)}?delete_file=${deleteFile}`,
+    { method: 'DELETE' },
+    'Failed to delete history'
+  )
 }
 
 
 // 获取搜索推荐热词列表
 export async function gtrecmdtn(): Promise<{ success: boolean; recommendations: string[] }> {
-  const res = await fetch(`${BASE_URL}/recommendations`)
-  if (!res.ok) throw new Error('Failed to fetch recommendations')
-  return res.json()
+  return reqjson<{ success: boolean; recommendations: string[] }>(`${BASE_URL}/recommendations`, undefined, 'Failed to fetch recommendations')
 }
 
 
 // 上报搜索关键词记录
 export async function rprtsrch(keyword: string): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/recommendations/report`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keyword }),
-  })
-  if (!res.ok) throw new Error('Failed to report search')
-  return res.json()
+  return postjson<unknown>(`${BASE_URL}/recommendations/report`, { keyword }, 'Failed to report search')
 }
 
 
@@ -355,61 +315,31 @@ export const getLocalArtworkUrl = (trackId: string) => `${BASE_URL}/local-artwor
 
 // 打开下载目标文件目录
 export async function opnfldr(path?: string): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/open-folder`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
-  })
-  if (!res.ok) throw new Error('Failed to open folder')
-  return res.json()
+  return postjson<unknown>(`${BASE_URL}/open-folder`, { path }, 'Failed to open folder')
 }
 
 
 // 打开转码输出文件目录
 export async function opncnvtfldr(): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/open-converted-folder`, {
-    method: 'POST',
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to open converted folder')
-  }
-  return res.json()
+  return postjson<unknown>(`${BASE_URL}/open-converted-folder`, undefined, 'Failed to open converted folder')
 }
 
 
 // 触发本地音乐目录重扫描
 export async function scnlcl(): Promise<ScanLocalResponse> {
-  const res = await fetch(`${BASE_URL}/scan-local`, {
-    method: 'POST',
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to scan local music files')
-  }
-  return res.json()
+  return postjson<ScanLocalResponse>(`${BASE_URL}/scan-local`, undefined, 'Failed to scan local music files')
 }
 
 
 // 获取本地伴随LRC歌词内容
 export async function gtlcllrc(trackId: string): Promise<LocalLyricsResponse> {
-  const res = await fetch(`${BASE_URL}/local-lyrics/${encodeURIComponent(trackId)}`)
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to load local lyrics')
-  }
-  return res.json()
+  return reqjson<LocalLyricsResponse>(`${BASE_URL}/local-lyrics/${encodeURIComponent(trackId)}`, undefined, 'Failed to load local lyrics')
 }
 
 
 // 请求WSL2安装环境预检信息
 export async function wslprchk(): Promise<Wsl2InstallPrecheckResponse> {
-  const res = await fetch(`${BASE_URL}/wsl2/install/precheck`)
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to check WSL2 install prerequisites')
-  }
-  return res.json()
+  return reqjson<Wsl2InstallPrecheckResponse>(`${BASE_URL}/wsl2/install/precheck`, undefined, 'Failed to check WSL2 install prerequisites')
 }
 
 
@@ -417,38 +347,19 @@ export async function wslprchk(): Promise<Wsl2InstallPrecheckResponse> {
 export async function wslstrt(payload?: {
   required_gb?: number
 }): Promise<Wsl2InstallStartResponse> {
-  const res = await fetch(`${BASE_URL}/wsl2/install/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {}),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to start WSL2 installation')
-  }
-  return res.json()
+  return postjson<Wsl2InstallStartResponse>(`${BASE_URL}/wsl2/install/start`, payload || {}, 'Failed to start WSL2 installation')
 }
 
 
 // 轮询WSL2安装进度状态
 export async function wslstts(): Promise<Wsl2InstallStatusResponse> {
-  const res = await fetch(`${BASE_URL}/wsl2/install/status`)
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to fetch WSL2 installation status')
-  }
-  return res.json()
+  return reqjson<Wsl2InstallStatusResponse>(`${BASE_URL}/wsl2/install/status`, undefined, 'Failed to fetch WSL2 installation status')
 }
 
 
 // 请求Wrapper部署前预检信息
 export async function wrprprchk(): Promise<WrapperSetupPrecheckResponse> {
-  const res = await fetch(`${BASE_URL}/wrapper/setup/precheck`)
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to check Wrapper setup prerequisites')
-  }
-  return res.json()
+  return reqjson<WrapperSetupPrecheckResponse>(`${BASE_URL}/wrapper/setup/precheck`, undefined, 'Failed to check Wrapper setup prerequisites')
 }
 
 
@@ -456,27 +367,13 @@ export async function wrprprchk(): Promise<WrapperSetupPrecheckResponse> {
 export async function wrprstrt(payload?: {
   force_restart?: boolean
 }): Promise<WrapperSetupStartResponse> {
-  const res = await fetch(`${BASE_URL}/wrapper/setup/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {}),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to start Wrapper setup')
-  }
-  return res.json()
+  return postjson<WrapperSetupStartResponse>(`${BASE_URL}/wrapper/setup/start`, payload || {}, 'Failed to start Wrapper setup')
 }
 
 
 // 轮询Wrapper部署与登录运行状态
 export async function wrprstts(): Promise<WrapperSetupStatusResponse> {
-  const res = await fetch(`${BASE_URL}/wrapper/setup/status`)
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to fetch Wrapper setup status')
-  }
-  return res.json()
+  return reqjson<WrapperSetupStatusResponse>(`${BASE_URL}/wrapper/setup/status`, undefined, 'Failed to fetch Wrapper setup status')
 }
 
 
@@ -487,16 +384,7 @@ export async function wrprint(payload: {
   password?: string
   code?: string
 }): Promise<WrapperSetupInputResponse> {
-  const res = await fetch(`${BASE_URL}/wrapper/setup/input`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Failed to submit Wrapper input')
-  }
-  return res.json()
+  return postjson<WrapperSetupInputResponse>(`${BASE_URL}/wrapper/setup/input`, payload, 'Failed to submit Wrapper input')
 }
 
 

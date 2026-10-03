@@ -1,6 +1,5 @@
 // 前端React渲染挂载主入口模块
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { StrictMode, createRoot } from './head'
 import App from './App'
 import './index.css'
 import { ThemeProvider } from './theme/ThemeProvider'

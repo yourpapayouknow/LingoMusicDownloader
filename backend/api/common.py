@@ -1,7 +1,7 @@
 # 共享常量、工具辅助函数与状态模型模块
 from backend.head import (
     os, sys, time, socket, subprocess, threading, ctypes,
-    logging, shutil, List, Dict, Any, Optional, Tuple, Path
+    logging, shutil, List, Dict, Any, Optional, Tuple, Path, re
 )
 from backend.core.config import settings
 
@@ -252,6 +252,13 @@ def wrprhlth() -> Dict[str, bool]:
         "account_ok": account_ok,
         "all_ok": decrypt_ok and m3u8_ok and account_ok,
     }
+
+
+# 规整化iTunes封面图占位模板
+def itnsarttmpl(url: str) -> str:
+    if not url:
+        return ""
+    return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
 
 
 # 兼容性别名映射

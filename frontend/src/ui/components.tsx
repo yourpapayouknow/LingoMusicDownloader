@@ -4,16 +4,14 @@ import {
   useMemo,
   useRef,
   useState,
+  useId,
   type CSSProperties,
   type ReactNode,
-} from '../head'
-import {
-  useId,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
-} from 'react'
+} from '../head'
 import { Box, HStack, Icon, Text, VStack, cx } from './primitives'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost'

@@ -1,16 +1,17 @@
 # Apple Music与iTunes音乐目录检索、推荐与防抖缓存模块
 from backend.head import (
     APIRouter, HTTPException, Query, Request, Response, BaseModel, Optional, List, Dict, Any,
-    time, json, re, logging, asyncio, httpx, urlparse, parse_qs
+    time, json, re, logging, asyncio, httpx, urlparse, parse_qs,
+    APPLE_MUSIC_SEARCH_API_URI
 )
 from backend.services.downloader import manager
 from backend.db.database import rprtsrch, gtrecmdtn
-from gamdl.api.constants import APPLE_MUSIC_SEARCH_API_URI
 from backend.api.common import (
     SEARCH_CATEGORY_KEYS, FAST_SEARCH_TYPES, FAST_SEARCH_LIMIT,
     FAST_SEARCH_TIMEOUT_SECONDS, FAST_SEARCH_DIRECT_TIMEOUT_SECONDS,
     ITUNES_SEARCH_TIMEOUT_SECONDS, SEARCH_CACHE_TTL_SECONDS,
-    SEARCH_CACHE_STALE_SECONDS, SEARCH_CACHE_MAX_ENTRIES
+    SEARCH_CACHE_STALE_SECONDS, SEARCH_CACHE_MAX_ENTRIES,
+    itnsarttmpl,
 )
 
 # 日志记录器与路由器
@@ -108,13 +109,6 @@ def svcdsrch(term: str, limit: int, payload: Dict[str, Any]) -> None:
     now_ts = time.time()
     _search_cache[srchckey(term, limit)] = (now_ts, payload)
     prnsrchc(now_ts)
-
-
-# 规范化iTunes封面图占位模板
-def itnsarttmpl(url: str) -> str:
-    if not url:
-        return ""
-    return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
 
 
 # 将iTunes歌曲转换为标准搜索条目

@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import shlex
 import unicodedata
+import getpass
 import urllib.request
 import zipfile
 import traceback
@@ -39,6 +40,46 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
+
+# routes_download.py | audio metadata
+from mutagen import File as MutagenFile
+from mutagen.mp4 import MP4Cover
+
+# routes_cookies.py | webview decrypt
+from Crypto.Cipher import AES
+
+# downloader.py | stream & media processing
+import m3u8
+from yt_dlp import YoutubeDL
+from httpx_retries import Retry, RetryTransport
+from gamdl.api.constants import APPLE_MUSIC_SEARCH_API_URI, APPLE_MUSIC_AMP_API_URL
+from gamdl.api.exceptions import GamdlApiResponseError
+from gamdl.interface.exceptions import (
+    GamdlInterfaceDecryptionNotAvailableError,
+    GamdlInterfaceFormatNotAvailableError,
+)
+from gamdl.api import AppleMusicApi
+from gamdl.downloader import (
+    AppleMusicBaseDownloader,
+    AppleMusicDownloader,
+    AppleMusicMusicVideoDownloader,
+    AppleMusicSongDownloader,
+    AppleMusicUploadedVideoDownloader,
+)
+from gamdl.downloader.enums import DownloadMode
+from gamdl.downloader.exceptions import GamdlDownloaderMediaFileExistsError
+from gamdl.interface import (
+    AppleMusicBaseInterface,
+    AppleMusicInterface,
+    AppleMusicMusicVideoInterface,
+    AppleMusicSongInterface,
+    AppleMusicUploadedVideoInterface,
+    SongCodec,
+    MusicVideoResolution,
+)
+from gamdl.interface.constants import MP4_FORMAT_CODECS
+from gamdl.interface.types import StreamInfo, StreamInfoAv
+from gamdl.interface.enums import MediaFileFormat
 
 __all__ = [
     "sys",

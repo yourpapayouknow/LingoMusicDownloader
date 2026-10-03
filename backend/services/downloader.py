@@ -2,43 +2,22 @@
 from backend.head import (
     asyncio, os, logging, subprocess, socket, re, shutil, tempfile,
     unicodedata, MozillaCookieJar, Path, Dict, Any, Optional, List,
-    urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen, httpx
+    urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen, httpx,
+    m3u8, YoutubeDL, Retry, RetryTransport,
+    APPLE_MUSIC_AMP_API_URL, GamdlApiResponseError,
+    GamdlInterfaceDecryptionNotAvailableError, GamdlInterfaceFormatNotAvailableError,
+    AppleMusicApi,
+    AppleMusicBaseDownloader, AppleMusicDownloader, AppleMusicMusicVideoDownloader,
+    AppleMusicSongDownloader, AppleMusicUploadedVideoDownloader,
+    DownloadMode, GamdlDownloaderMediaFileExistsError,
+    AppleMusicBaseInterface, AppleMusicInterface, AppleMusicMusicVideoInterface,
+    AppleMusicSongInterface, AppleMusicUploadedVideoInterface,
+    SongCodec, MusicVideoResolution, MP4_FORMAT_CODECS,
+    StreamInfo, StreamInfoAv, MediaFileFormat
 )
 
 from backend.db.database import inshstry as insert_history, gtallstngs as get_all_settings
-
-from gamdl.api.exceptions import GamdlApiResponseError
-from gamdl.interface.exceptions import (
-    GamdlInterfaceDecryptionNotAvailableError,
-    GamdlInterfaceFormatNotAvailableError,
-)
-
-from gamdl.api import AppleMusicApi
-from gamdl.api.constants import APPLE_MUSIC_AMP_API_URL
-from httpx_retries import Retry, RetryTransport
-from gamdl.downloader import (
-    AppleMusicBaseDownloader,
-    AppleMusicDownloader,
-    AppleMusicMusicVideoDownloader,
-    AppleMusicSongDownloader,
-    AppleMusicUploadedVideoDownloader,
-)
-from gamdl.downloader.enums import DownloadMode
-from gamdl.downloader.exceptions import GamdlDownloaderMediaFileExistsError
-from gamdl.interface import (
-    AppleMusicBaseInterface,
-    AppleMusicInterface,
-    AppleMusicMusicVideoInterface,
-    AppleMusicSongInterface,
-    AppleMusicUploadedVideoInterface,
-    SongCodec,
-    MusicVideoResolution
-)
-from gamdl.interface.constants import MP4_FORMAT_CODECS
-from gamdl.interface.types import StreamInfo, StreamInfoAv
-from gamdl.interface.enums import MediaFileFormat
-import m3u8
-from yt_dlp import YoutubeDL
+from backend.api.common import itnsarttmpl as _itunes_artwork_template
 
 from backend.core.config import settings
 
@@ -168,12 +147,6 @@ def _synthetic_account_info(storefront: str) -> Dict[str, Any]:
             },
         },
     }
-
-
-def _itunes_artwork_template(url: str) -> str:
-    if not url:
-        return ""
-    return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
 
 
 async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:

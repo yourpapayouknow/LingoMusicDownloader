@@ -1,3 +1,4 @@
+// 应用全局主题色彩与暗黑/明亮模式切换上下文模块
 import {
   createContext,
   useCallback,
@@ -6,7 +7,7 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
-} from 'react'
+} from '../head'
 import { getTheme, type ResolvedTheme, type ThemeMode } from '../tokens/tokens'
 
 type ThemeContextValue = {
