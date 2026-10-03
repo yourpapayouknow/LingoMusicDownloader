@@ -71,6 +71,8 @@ const SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4 = 'lingomusic-transcode-alac-to-mp4'
 
 // 首次启动初始化引导完成标记存储键
 const SETTINGS_KEY_INIT_GUIDE_DISMISSED = 'lingomusic-init-guide-dismissed'
+// 跳过Wrapper开机自启标记存储键
+const SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART = 'lingomusic-skip-wrapper-autostart'
 
 const INIT_AGREEMENT_PARAGRAPHS = [
   '欢迎使用 LingoMusicDownloader。本软件用于个人学习与技术研究，不构成任何商业服务或平台义务承诺。',
@@ -244,6 +246,10 @@ export default function App() {
     return localStorage.getItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED) !== 'true'
   })
   const userManuallyOpenedInitGuideRef = useRef(false)
+  const [skipWrapperAutostart, setSkipWrapperAutostart] = useState(() => {
+    return localStorage.getItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART) === 'true'
+  })
+  const wrapperAutostartAttemptedRef = useRef(false)
   const [initGuideStep, setInitGuideStep] = useState<1 | 2>(1)
   const [initAgreementReachedEnd, setInitAgreementReachedEnd] = useState(false)
   const [initEnterConfirmOpen, setInitEnterConfirmOpen] = useState(false)
@@ -550,6 +556,9 @@ export default function App() {
       setInitEnterConfirmOpen(true)
       return
     }
+    setSkipWrapperAutostart(false)
+    localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
+    saveSettingsApi({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
     dismissInitGuide()
   }, [initWrapperConfigured, dismissInitGuide])
 
@@ -699,6 +708,9 @@ export default function App() {
       if (!wrapperSetupCompletedNotifiedRef.current) {
         wrapperSetupCompletedNotifiedRef.current = true
         if (status.success_flag) {
+          setSkipWrapperAutostart(false)
+          localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
+          saveSettingsApi({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
           pushToast('Wrapper已就绪', status.message || 'Wrapper正在运行', 'success')
           try {
             const [statusData, health] = await Promise.all([getStatus(), getHealth()])
@@ -748,63 +760,51 @@ export default function App() {
     }
   }, [pushToast, stopWrapperSetupPolling, syncWrapperSetupStatus])
 
+  // 启动Wrapper服务并启动状态轮询监控
+  const triggerWrapperSetup = useCallback(async (forceRestart: boolean = false, isSilent: boolean = false) => {
+    if (wrapperSetupLoading) return false
+    setWrapperSetupLoading(true)
+    wrapperSetupCompletedNotifiedRef.current = false
+
+    try {
+      const startRes = await startWrapperSetupApi({ force_restart: forceRestart })
+      if (!startRes.success) {
+        if (!isSilent) {
+          pushToast(forceRestart ? '无法重启' : '无法启动', startRes.message || 'Wrapper启动前检查未通过', 'error')
+        }
+        setWrapperSetupLoading(false)
+        return false
+      }
+
+      await syncWrapperSetupStatus()
+      if (startRes.status !== 'success') {
+        stopWrapperSetupPolling()
+        wrapperSetupPollTimerRef.current = window.setInterval(() => {
+          syncWrapperSetupStatus().catch(console.error)
+        }, 1100)
+      } else {
+        setWrapperSetupLoading(false)
+      }
+      return true
+    } catch (err: any) {
+      console.error(err)
+      if (!isSilent) {
+        pushToast(forceRestart ? '重启失败' : '启动失败', err.message || '无法启动Wrapper流程', 'error')
+      }
+      setWrapperSetupLoading(false)
+      return false
+    }
+  }, [wrapperSetupLoading, pushToast, stopWrapperSetupPolling, syncWrapperSetupStatus])
+
+  // 确认启动Wrapper服务
   const handleConfirmStartWrapperSetup = useCallback(async () => {
-    if (wrapperSetupLoading) return
-    setWrapperSetupLoading(true)
-    wrapperSetupCompletedNotifiedRef.current = false
+    await triggerWrapperSetup(false, false)
+  }, [triggerWrapperSetup])
 
-    try {
-      const startRes = await startWrapperSetupApi()
-      if (!startRes.success) {
-        pushToast('无法启动', startRes.message || 'Wrapper启动前检查未通过', 'error')
-        setWrapperSetupLoading(false)
-        return
-      }
-
-      await syncWrapperSetupStatus()
-      if (startRes.status !== 'success') {
-        stopWrapperSetupPolling()
-        wrapperSetupPollTimerRef.current = window.setInterval(() => {
-          syncWrapperSetupStatus().catch(console.error)
-        }, 1100)
-      } else {
-        setWrapperSetupLoading(false)
-      }
-    } catch (err: any) {
-      console.error(err)
-      pushToast('启动失败', err.message || '无法启动Wrapper流程', 'error')
-      setWrapperSetupLoading(false)
-    }
-  }, [wrapperSetupLoading, pushToast, stopWrapperSetupPolling, syncWrapperSetupStatus])
-
+  // 确认重启Wrapper服务
   const handleRestartWrapperSetup = useCallback(async () => {
-    if (wrapperSetupLoading) return
-    setWrapperSetupLoading(true)
-    wrapperSetupCompletedNotifiedRef.current = false
-
-    try {
-      const startRes = await startWrapperSetupApi({ force_restart: true })
-      if (!startRes.success) {
-        pushToast('无法重启', startRes.message || 'Wrapper重启前检查未通过', 'error')
-        setWrapperSetupLoading(false)
-        return
-      }
-
-      await syncWrapperSetupStatus()
-      if (startRes.status !== 'success') {
-        stopWrapperSetupPolling()
-        wrapperSetupPollTimerRef.current = window.setInterval(() => {
-          syncWrapperSetupStatus().catch(console.error)
-        }, 1100)
-      } else {
-        setWrapperSetupLoading(false)
-      }
-    } catch (err: any) {
-      console.error(err)
-      pushToast('重启失败', err.message || '无法重启Wrapper流程', 'error')
-      setWrapperSetupLoading(false)
-    }
-  }, [wrapperSetupLoading, pushToast, stopWrapperSetupPolling, syncWrapperSetupStatus])
+    await triggerWrapperSetup(true, false)
+  }, [triggerWrapperSetup])
 
   const handleCloseWrapperSetupDialog = useCallback(() => {
     if (wrapperSetupStatusData?.running) return
@@ -1165,6 +1165,11 @@ export default function App() {
           }
         }
       }
+      if (settings[SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART] !== undefined) {
+        const skipped = settings[SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART] === 'true' || settings[SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART] === true
+        setSkipWrapperAutostart(skipped)
+        localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, skipped ? 'true' : 'false')
+      }
       setSettingsLoaded(true)
     }).catch(err => {
       console.error(err)
@@ -1183,6 +1188,17 @@ export default function App() {
     const interval = setInterval(fetchStatusAndHealth, 3000)
     return () => clearInterval(interval)
   }, [fetchStatusAndHealth])
+
+  // 监控启动流程并在未跳过时默认自动启动Wrapper服务
+  useEffect(() => {
+    if (!settingsLoaded || initGuideOpen) return
+    if (wrapperAutostartAttemptedRef.current) return
+    if (skipWrapperAutostart) return
+    if (healthStatus?.wrapper.all_ok) return
+
+    wrapperAutostartAttemptedRef.current = true
+    void triggerWrapperSetup(false, false)
+  }, [settingsLoaded, initGuideOpen, skipWrapperAutostart, healthStatus?.wrapper.all_ok, triggerWrapperSetup])
 
   // Preview lyrics timer animation
   useEffect(() => {
@@ -2829,6 +2845,9 @@ export default function App() {
                           <Badge tone={initWrapperConfigured ? 'success' : 'default'}>
                             Wrapper: {initWrapperConfigured ? '已配置' : '未配置'}
                           </Badge>
+                          <Badge tone={skipWrapperAutostart ? 'default' : 'info'}>
+                            自启: {skipWrapperAutostart ? '已跳过' : '默认开启'}
+                          </Badge>
                         </HStack>
                         <Button onClick={handleOpenInitGuideFromSettings}>
                           打开初始化页面
@@ -3527,6 +3546,10 @@ export default function App() {
                             className="init-guide-primary-btn"
                             onClick={() => {
                               setInitEnterConfirmOpen(false)
+                              setSkipWrapperAutostart(true)
+                              localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'true')
+                              saveSettingsApi({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'true' }).catch(console.error)
+                              pushToast('已跳过Wrapper配置', '后续可在设置中随时配置与启动', 'info')
                               dismissInitGuide()
                             }}
                           >
