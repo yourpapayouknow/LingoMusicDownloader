@@ -69,8 +69,8 @@ const SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC = 'lingomusic-transcode-alac-to-flac'
 const SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV = 'lingomusic-transcode-alac-to-wav'
 const SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4 = 'lingomusic-transcode-alac-to-mp4'
 
-// Onboarding guide (frontend-only phase)
-const FORCE_SHOW_INIT_GUIDE = true
+// 首次启动初始化引导完成标记存储键
+const SETTINGS_KEY_INIT_GUIDE_DISMISSED = 'lingomusic-init-guide-dismissed'
 
 const INIT_AGREEMENT_PARAGRAPHS = [
   '欢迎使用 LingoMusicDownloader。本软件用于个人学习与技术研究，不构成任何商业服务或平台义务承诺。',
@@ -240,7 +240,10 @@ export default function App() {
   const [cookieText, setCookieText] = useState('')
   const [cookieSaving, setCookieSaving] = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
-  const [initGuideOpen, setInitGuideOpen] = useState(FORCE_SHOW_INIT_GUIDE)
+  const [initGuideOpen, setInitGuideOpen] = useState(() => {
+    return localStorage.getItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED) !== 'true'
+  })
+  const userManuallyOpenedInitGuideRef = useRef(false)
   const [initGuideStep, setInitGuideStep] = useState<1 | 2>(1)
   const [initAgreementReachedEnd, setInitAgreementReachedEnd] = useState(false)
   const [initEnterConfirmOpen, setInitEnterConfirmOpen] = useState(false)
@@ -531,15 +534,28 @@ export default function App() {
     }
   }, [initCookieLoggingIn, pushToast])
 
+  // 关闭初始化引导弹窗并持久化完成状态
+  const dismissInitGuide = useCallback(() => {
+    userManuallyOpenedInitGuideRef.current = false
+    localStorage.setItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED, 'true')
+    setInitGuideOpen(false)
+    saveSettingsApi({
+      [SETTINGS_KEY_INIT_GUIDE_DISMISSED]: 'true'
+    }).catch(console.error)
+  }, [])
+
+  // 确认进入主界面
   const handleInitEnterSoftware = useCallback(() => {
     if (!initWrapperConfigured) {
       setInitEnterConfirmOpen(true)
       return
     }
-    setInitGuideOpen(false)
-  }, [initWrapperConfigured])
+    dismissInitGuide()
+  }, [initWrapperConfigured, dismissInitGuide])
 
+  // 从设置界面手动打开初始化页面
   const handleOpenInitGuideFromSettings = useCallback(() => {
+    userManuallyOpenedInitGuideRef.current = true
     setInitEnterConfirmOpen(false)
     setInitGuideStep(1)
     setInitAgreementReachedEnd(false)
@@ -1005,6 +1021,15 @@ export default function App() {
       const health = await getHealth()
       setHealthStatus(health)
 
+      // 同步初始化与登录就绪状态
+      if (!userManuallyOpenedInitGuideRef.current && (statusData.is_initialized || health.cookies_ok)) {
+        if (localStorage.getItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED) !== 'true') {
+          localStorage.setItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED, 'true')
+          saveSettingsApi({ [SETTINGS_KEY_INIT_GUIDE_DISMISSED]: 'true' }).catch(console.error)
+        }
+        setInitGuideOpen(false)
+      }
+
       // Sync active downloading queue from backend
       if (statusData.downloads) {
         const activeQueue: QueueItem[] = []
@@ -1130,6 +1155,15 @@ export default function App() {
       }
       if (settings[SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4] !== undefined) {
         setTranscodeAlacToMp4(settings[SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4] === 'true' || settings[SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4] === true)
+      }
+      if (settings[SETTINGS_KEY_INIT_GUIDE_DISMISSED] !== undefined) {
+        const isDismissed = settings[SETTINGS_KEY_INIT_GUIDE_DISMISSED] === 'true' || settings[SETTINGS_KEY_INIT_GUIDE_DISMISSED] === true
+        if (isDismissed) {
+          localStorage.setItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED, 'true')
+          if (!userManuallyOpenedInitGuideRef.current) {
+            setInitGuideOpen(false)
+          }
+        }
       }
       setSettingsLoaded(true)
     }).catch(err => {
@@ -3493,7 +3527,7 @@ export default function App() {
                             className="init-guide-primary-btn"
                             onClick={() => {
                               setInitEnterConfirmOpen(false)
-                              setInitGuideOpen(false)
+                              dismissInitGuide()
                             }}
                           >
                             仍然进入
