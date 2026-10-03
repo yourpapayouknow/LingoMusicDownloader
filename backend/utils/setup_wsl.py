@@ -22,7 +22,7 @@ def prmptinstwsl() -> None:
     print("  WSL2 is required to run the Apple Music Wrapper.")
     print("  Please install it by following these steps:")
     print()
-    print("  1. Open PowerShell as Administrator.")
+    print("  1. Open PowerShell 7 (pwsh) as Administrator.")
     print("  2. Run:  wsl --install")
     print("  3. Restart your computer when prompted.")
     print("  4. Run this script again after restarting.")

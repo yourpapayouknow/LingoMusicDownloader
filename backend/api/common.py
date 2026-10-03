@@ -1,7 +1,7 @@
 # 共享常量、工具辅助函数与状态模型模块
 from backend.head import (
     os, sys, time, socket, subprocess, threading, ctypes,
-    logging, shutil, List, Dict, Any, Optional, Tuple, Path, re
+    logging, shutil, List, Dict, Any, Optional, Tuple, Path, re, unicodedata
 )
 from backend.core.config import settings
 
@@ -261,6 +261,62 @@ def itnsarttmpl(url: str) -> str:
     return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
 
 
+# 生成文件名归一化比较键
+def fnmkey(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value or "")
+    normalized = normalized.casefold().strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
+# 剥除曲目前缀序号字符
+def strptrkprfx(name: str) -> str:
+    return re.sub(r"^\s*\d{1,3}\s*[\-._)\]]?\s*", "", name).strip()
+
+
+# 查找伴随同名LRC歌词文件路径
+def fndsdcrlrc(audio_path: str, preferred_path: Optional[str] = None) -> Optional[str]:
+    audio_obj = Path(audio_path)
+    if not audio_obj.exists():
+        return None
+
+    if preferred_path:
+        try:
+            preferred_obj = Path(preferred_path)
+            if preferred_obj.exists() and preferred_obj.is_file():
+                return str(preferred_obj)
+        except Exception:
+            pass
+
+    for candidate in (audio_obj.with_suffix(".lrc"), audio_obj.with_suffix(".LRC")):
+        if candidate.exists() and candidate.is_file():
+            return str(candidate)
+
+    parent = audio_obj.parent
+    target_keys = {
+        fnmkey(audio_obj.stem),
+        fnmkey(strptrkprfx(audio_obj.stem)),
+    }
+    target_keys = {key for key in target_keys if key}
+
+    try:
+        lrc_files = [p for p in parent.iterdir() if p.is_file() and p.suffix.lower() == ".lrc"]
+    except Exception:
+        return None
+
+    for file in lrc_files:
+        if fnmkey(file.stem) in target_keys:
+            return str(file)
+
+    for file in lrc_files:
+        if fnmkey(strptrkprfx(file.stem)) in target_keys:
+            return str(file)
+
+    if len(lrc_files) == 1:
+        return str(lrc_files[0])
+
+    return None
+
+
 # 兼容性别名映射
 _ps_single_quote = pssqt
 _wsl2_copy_state = wslstcpy
@@ -277,3 +333,6 @@ _wrapper_append_log = wrprstlog
 _set_wrapper_process = setwrprprc
 _get_wrapper_process = gtwrprprc
 _get_wrapper_runtime_health = wrprhlth
+_filename_key = fnmkey
+_strip_track_prefix = strptrkprfx
+_find_sidecar_lrc_path = fndsdcrlrc

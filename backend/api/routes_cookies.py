@@ -450,7 +450,7 @@ async def intmngrrtr(
 
 # 保存手动输入的Netscape Cookies端点
 @router.post("/cookies")
-async def save_cookies(request: CookieRequest):
+async def svcksrtr(request: CookieRequest):
     try:
         with open(settings.ckspth(), "w", encoding="utf-8") as f:
             f.write(request.content.strip())
@@ -464,7 +464,7 @@ async def save_cookies(request: CookieRequest):
 
 # 探测WebView登录Cookie就绪状态端点
 @router.post("/cookie-login/probe")
-async def probe_cookie_login(request: CookieLoginFinalizeRequest):
+async def prbcklgn(request: CookieLoginFinalizeRequest):
     try:
         probe_result = await asyncio.to_thread(
             exptaplcks,
@@ -493,7 +493,7 @@ async def probe_cookie_login(request: CookieLoginFinalizeRequest):
 
 # 完成WebView登录并导出Cookies端点
 @router.post("/cookie-login/finalize")
-async def finalize_cookie_login(request: CookieLoginFinalizeRequest):
+async def fnlcklgn(request: CookieLoginFinalizeRequest):
     try:
         export_result = await asyncio.to_thread(
             exptaplcks,
@@ -533,5 +533,8 @@ async def finalize_cookie_login(request: CookieLoginFinalizeRequest):
 
 
 # 兼容性别名
+save_cookies = svcksrtr
+probe_cookie_login = prbcklgn
+finalize_cookie_login = fnlcklgn
 _initialize_manager_with_retry = intmngrrtr
 _export_apple_music_cookies_from_webview = exptaplcks

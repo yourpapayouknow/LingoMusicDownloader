@@ -576,7 +576,7 @@ def wslinstwrkr(precheck: Dict[str, Any]) -> None:
 
 # WSL2安装环境预检端点
 @router.get("/wsl2/install/precheck")
-async def wsl2_install_precheck():
+async def wslprchkrtr():
     if os.name != "nt":
         return {
             "success": False,
@@ -598,7 +598,7 @@ async def wsl2_install_precheck():
 
 # 触发WSL2安装流程端点
 @router.post("/wsl2/install/start")
-async def start_wsl2_install(request: Wsl2InstallStartRequest):
+async def strtwslrtr(request: Wsl2InstallStartRequest):
     if os.name != "nt":
         raise HTTPException(status_code=400, detail="Current OS does not support WSL2 installation.")
 
@@ -677,12 +677,15 @@ async def start_wsl2_install(request: Wsl2InstallStartRequest):
 
 # 获取WSL2安装进度与日志端点
 @router.get("/wsl2/install/status")
-async def get_wsl2_install_status():
+async def gtwslsttsrtr():
     state = wslstcpy()
     return {"success": True, **state}
 
 
 # 兼容性别名
+wsl2_install_precheck = wslprchkrtr
+start_wsl2_install = strtwslrtr
+get_wsl2_install_status = gtwslsttsrtr
 _detect_wsl2_installed = dtctwsl
 _build_wsl2_precheck = bldwslprchk
 _wsl2_install_worker = wslinstwrkr

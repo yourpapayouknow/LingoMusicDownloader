@@ -211,7 +211,8 @@ async def srchitnsfb(term: str, limit: int) -> Dict[str, Any]:
     per_entity_limit = max(1, min(limit, 25))
 
     async with httpx.AsyncClient(timeout=ITUNES_SEARCH_TIMEOUT_SECONDS, follow_redirects=True) as client:
-        async def fetch_entity(entity: str) -> Dict[str, Any]:
+        # 异步拉取iTunes指定实体分类搜索结果
+        async def ftchent(entity: str) -> Dict[str, Any]:
             response = await client.get(
                 "https://itunes.apple.com/search",
                 params={
@@ -228,7 +229,7 @@ async def srchitnsfb(term: str, limit: int) -> Dict[str, Any]:
             return payload if isinstance(payload, dict) else {}
 
         payloads = await asyncio.gather(
-            *(fetch_entity(entity) for entity, _ in entity_specs.values()),
+            *(ftchent(entity) for entity, _ in entity_specs.values()),
         )
 
     results: Dict[str, Dict[str, Any]] = {
@@ -304,6 +305,7 @@ async def srchfast(term: str, limit: int = FAST_SEARCH_LIMIT) -> Dict[str, Any]:
     if inflight is not None:
         return await inflight
 
+    # 异步执行综合搜索并写入缓存
     async def _fetch() -> Dict[str, Any]:
         try:
             if getattr(manager.apple_music_api, "_lingo_legacy_wrapper_fallback", False):
@@ -390,13 +392,13 @@ def prsaplurl(url: str):
 
 # 响应HEAD预检探测端点
 @router.head("/search", include_in_schema=False)
-async def search_apple_music_head():
+async def srchhd():
     return Response()
 
 
 # 音乐与媒体目录搜索端点
 @router.get("/search")
-async def search_apple_music(request: Request, term: str = Query(..., description="Search term")):
+async def srchaplrtr(request: Request, term: str = Query(..., description="Search term")):
     if not manager.is_initialized:
         success = await manager.initialize()
         if not success:
@@ -469,19 +471,23 @@ async def search_apple_music(request: Request, term: str = Query(..., descriptio
 
 # 获取搜索热词推荐列表端点
 @router.get("/recommendations")
-async def api_get_recommendations() -> Dict[str, Any]:
+async def gtrecmdrtr() -> Dict[str, Any]:
     recs = gtrecmdtn(limit=10)
     return {"success": True, "recommendations": recs}
 
 
 # 上报搜索热词记录端点
 @router.post("/recommendations/report")
-async def api_report_search(request: ReportSearchRequest):
+async def rprtsrchrtr(request: ReportSearchRequest):
     rprtsrch(request.keyword)
     return {"success": True}
 
 
 # 兼容性别名
+search_apple_music_head = srchhd
+search_apple_music = srchaplrtr
+api_get_recommendations = gtrecmdrtr
+api_report_search = rprtsrchrtr
 parse_apple_music_url = prsaplurl
 _normalize_search_results = nrmlsrchrst
 _search_catalog_fast = srchfast

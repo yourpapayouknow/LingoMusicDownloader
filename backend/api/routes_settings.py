@@ -23,26 +23,26 @@ _health_lock = asyncio.Lock()
 
 # 读取全部客户端配置端点
 @router.get("/settings")
-async def api_get_settings() -> Dict[str, Any]:
+async def gtstngsrtr() -> Dict[str, Any]:
     return gtallstngs()
 
 
 # 保存客户端配置键值端点
 @router.post("/settings")
-async def api_save_settings(settings_dict: Dict[str, Any]):
+async def svstngsrtr(settings_dict: Dict[str, Any]):
     svstngs(settings_dict)
     return {"success": True, "message": "Settings updated"}
 
 
 # 获取全量历史下载记录端点
 @router.get("/history")
-async def api_get_history() -> List[Dict[str, Any]]:
+async def gthstryrtr() -> List[Dict[str, Any]]:
     return gthstry()
 
 
 # 删除单条历史下载记录及关联文件端点
 @router.delete("/history/{track_id}")
-async def api_delete_history(track_id: str, delete_file: bool = False):
+async def dlthstryrtr(track_id: str, delete_file: bool = False):
     if delete_file:
         track = gthstrybytrk(track_id)
         if track and track.get("file_path"):
@@ -58,7 +58,7 @@ async def api_delete_history(track_id: str, delete_file: bool = False):
 
 # 系统全链路运行健康检查端点
 @router.get("/health")
-async def health_check() -> Dict[str, Any]:
+async def hlthchkrtr() -> Dict[str, Any]:
     global _health_cache
 
     now_ts = time.time()
@@ -91,3 +91,11 @@ async def health_check() -> Dict[str, Any]:
         }
         _health_cache = (time.time(), payload)
         return payload
+
+
+# 兼容性别名
+api_get_settings = gtstngsrtr
+api_save_settings = svstngsrtr
+api_get_history = gthstryrtr
+api_delete_history = dlthstryrtr
+health_check = hlthchkrtr

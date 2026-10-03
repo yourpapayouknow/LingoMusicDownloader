@@ -594,13 +594,13 @@ def sndwrprint(lines: List[str]) -> tuple[bool, str]:
 
 # Wrapper部署环境预检端点
 @router.get("/wrapper/setup/precheck")
-async def wrapper_setup_precheck():
+async def wrprprchkrtr():
     return bldwrprprchk()
 
 
 # 启动Wrapper部署与初始化流程端点
 @router.post("/wrapper/setup/start")
-async def start_wrapper_setup(request: WrapperSetupStartRequest):
+async def strtwrprrtr(request: WrapperSetupStartRequest):
     precheck = bldwrprprchk()
 
     if not precheck.get("can_start"):
@@ -660,7 +660,7 @@ async def start_wrapper_setup(request: WrapperSetupStartRequest):
 
 # 获取Wrapper部署与认证进度端点
 @router.get("/wrapper/setup/status")
-async def get_wrapper_setup_status():
+async def gtwrprsttsrtr():
     state = wrprstcpy()
     if iswrprrun() and state.get("status") != "success":
         wrprstset(
@@ -686,7 +686,7 @@ async def get_wrapper_setup_status():
 
 # 提交Wrapper交互凭证或验证码端点
 @router.post("/wrapper/setup/input")
-async def submit_wrapper_setup_input(request: WrapperSetupInputRequest):
+async def sbmtwrprintrtr(request: WrapperSetupInputRequest):
     state = wrprstcpy()
     expected = str(state.get("input_type") or "").strip().lower()
     requested = (request.input_type or "").strip().lower()
@@ -787,6 +787,10 @@ async def submit_wrapper_setup_input(request: WrapperSetupInputRequest):
 
 
 # 兼容性别名
+wrapper_setup_precheck = wrprprchkrtr
+start_wrapper_setup = strtwrprrtr
+get_wrapper_setup_status = gtwrprsttsrtr
+submit_wrapper_setup_input = sbmtwrprintrtr
 _is_wrapper_installed = iswrprinst
 _is_wrapper_running = iswrprrun
 _build_wrapper_precheck = bldwrprprchk

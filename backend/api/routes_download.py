@@ -10,7 +10,8 @@ from backend.db.database import (
     gthstrybytrk, inshstry, updhstrylrc
 )
 from backend.api.common import (
-    nrmlcdclbl, wrprhlth, LOCAL_SCAN_EXTENSIONS, LOCAL_API_BASE_URL
+    nrmlcdclbl, wrprhlth, LOCAL_SCAN_EXTENSIONS, LOCAL_API_BASE_URL,
+    fnmkey, strptrkprfx, fndsdcrlrc
 )
 
 # 日志记录器与路由器
@@ -96,60 +97,7 @@ def extrcovr(file_path: str) -> Optional[tuple[bytes, str]]:
     return cover_bytes, "image/jpeg"
 
 
-# 生成文件名归一化比较键
-def fnmkey(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value or "")
-    normalized = normalized.casefold().strip()
-    return re.sub(r"\s+", " ", normalized)
 
-
-# 剥除曲目前缀序号字符
-def strptrkprfx(name: str) -> str:
-    return re.sub(r"^\s*\d{1,3}\s*[\-._)\]]?\s*", "", name).strip()
-
-
-# 查找伴随同名LRC歌词文件路径
-def fndsdcrlrc(audio_path: str, preferred_path: Optional[str] = None) -> Optional[str]:
-    audio_obj = Path(audio_path)
-    if not audio_obj.exists():
-        return None
-
-    if preferred_path:
-        try:
-            preferred_obj = Path(preferred_path)
-            if preferred_obj.exists() and preferred_obj.is_file():
-                return str(preferred_obj)
-        except Exception:
-            pass
-
-    for candidate in (audio_obj.with_suffix(".lrc"), audio_obj.with_suffix(".LRC")):
-        if candidate.exists() and candidate.is_file():
-            return str(candidate)
-
-    parent = audio_obj.parent
-    target_keys = {
-        fnmkey(audio_obj.stem),
-        fnmkey(strptrkprfx(audio_obj.stem)),
-    }
-    target_keys = {key for key in target_keys if key}
-
-    try:
-        lrc_files = [p for p in parent.iterdir() if p.is_file() and p.suffix.lower() == ".lrc"]
-    except Exception:
-        return None
-
-    for file in lrc_files:
-        if fnmkey(file.stem) in target_keys:
-            return str(file)
-
-    for file in lrc_files:
-        if fnmkey(strptrkprfx(file.stem)) in target_keys:
-            return str(file)
-
-    if len(lrc_files) == 1:
-        return str(lrc_files[0])
-
-    return None
 
 
 # 自动降级编码读取歌词文本文件
@@ -364,7 +312,7 @@ def scnlcllb(root_path: str) -> Dict[str, Any]:
 
 # 提交单曲或专辑下载任务端点
 @router.post("/download")
-async def start_download(request: DownloadRequest):
+async def strtdwnld(request: DownloadRequest):
     if not manager.is_initialized:
         success = await manager.initialize()
         if not success:
@@ -408,7 +356,7 @@ async def start_download(request: DownloadRequest):
 
 # 获取下载队列状态端点
 @router.get("/status")
-async def get_status() -> Dict[str, Any]:
+async def gtdwnldstts() -> Dict[str, Any]:
     return {
         "is_initialized": manager.is_initialized,
         "downloads": manager.download_status
@@ -417,7 +365,7 @@ async def get_status() -> Dict[str, Any]:
 
 # 本地音频流式试听播放端点
 @router.get("/local-play/{track_id}")
-async def stream_local_audio(track_id: str):
+async def strmlclad(track_id: str):
     track = gthstrybytrk(track_id)
     if not track:
         raise HTTPException(status_code=404, detail="Track history not found")
@@ -447,7 +395,7 @@ async def stream_local_audio(track_id: str):
 
 # 获取本地音频内嵌封面图像端点
 @router.get("/local-artwork/{track_id}")
-async def get_local_artwork(track_id: str):
+async def gtlchart(track_id: str):
     track = gthstrybytrk(track_id)
     if not track:
         raise HTTPException(status_code=404, detail="Track history not found")
@@ -475,7 +423,7 @@ async def get_local_artwork(track_id: str):
 
 # 获取本地伴随LRC歌词文本端点
 @router.get("/local-lyrics/{track_id}")
-async def get_local_lyrics(track_id: str):
+async def gtlcllrc(track_id: str):
     track = gthstrybytrk(track_id)
     if not track:
         raise HTTPException(status_code=404, detail="Track history not found")
@@ -507,7 +455,7 @@ async def get_local_lyrics(track_id: str):
 
 # 打开下载资源管理器目录端点
 @router.post("/open-folder")
-async def open_download_folder(request: OpenFolderRequest):
+async def opndwnldfldr(request: OpenFolderRequest):
     path = request.path
     target_path = path or settings.outpth()
     if not os.path.exists(target_path) and not path:
@@ -533,7 +481,7 @@ async def open_download_folder(request: OpenFolderRequest):
 
 # 打开音频格式转换输出目录端点
 @router.post("/open-converted-folder")
-async def open_converted_folder():
+async def opncnvtfldr():
     target_path = settings.cnvtpth()
     os.makedirs(target_path, exist_ok=True)
     try:
@@ -548,7 +496,7 @@ async def open_converted_folder():
 
 # 触发本地音乐目录重扫描端点
 @router.post("/scan-local")
-async def scan_local_library():
+async def scnlcllbrtr():
     try:
         root_path = settings.outpth()
         os.makedirs(root_path, exist_ok=True)
@@ -560,4 +508,12 @@ async def scan_local_library():
 
 
 # 兼容性别名
+start_download = strtdwnld
+get_status = gtdwnldstts
+stream_local_audio = strmlclad
+get_local_artwork = gtlchart
+get_local_lyrics = gtlcllrc
+open_download_folder = opndwnldfldr
+open_converted_folder = opncnvtfldr
+scan_local_library = scnlcllbrtr
 _scan_local_library_impl = scnlcllb
