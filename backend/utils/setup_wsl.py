@@ -1,11 +1,10 @@
-import os
-import subprocess
-import urllib.request
-import zipfile
+# 终端独立运行的WSL与Wrapper向导部署实用工具
+from backend.head import os, subprocess, urllib, zipfile
+from backend.core.config import settings
 
 
-def check_wsl_installed() -> bool:
-    """Return True if WSL is installed and accessible on this system."""
+# 检查WSL是否已安装并且可在系统中调用
+def chkwslinst() -> bool:
     try:
         subprocess.run(
             ["wsl", "--status"],
@@ -16,10 +15,11 @@ def check_wsl_installed() -> bool:
     except FileNotFoundError:
         return False
     except subprocess.TimeoutExpired:
-        return True  # Command exists, just slow
+        return True
 
 
-def prompt_install_wsl() -> None:
+# 打印引导用户安装WSL2的提示说明
+def prmptinstwsl() -> None:
     print()
     print("=" * 60)
     print("  ERROR: WSL2 is not installed on this system.")
@@ -36,37 +36,27 @@ def prompt_install_wsl() -> None:
     input("  Press Enter to exit...")
 
 
-def setup_wsl_wrapper() -> None:
-    # ── Step 1: Verify WSL is available ───────────────────────
-    if not check_wsl_installed():
-        prompt_install_wsl()
+# 交互式引导下载并配置WSL Wrapper
+def stwrprwsl() -> None:
+    if not chkwslinst():
+        prmptinstwsl()
         return
 
     print("[OK] WSL is available.")
-
-    # ── Step 2: Resolve paths ──────────────────────────────────
-    base_dir = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
+    base_dir = settings.bsdir()
     wrapper_dir = os.path.join(base_dir, "backend", "wsl_wrapper")
     os.makedirs(wrapper_dir, exist_ok=True)
-
     wrapper_binary = os.path.join(wrapper_dir, "wrapper")
 
-    # Session is confirmed by the SQLite database the wrapper writes after login.
-    # Path mirrors entrypoint.sh: TOKEN_DB_PATH="/app/rootfs/data/data/.../kvs.sqlitedb"
-    # where /app == wrapper's working directory (backend/wsl_wrapper/).
     session_db = os.path.join(
         wrapper_dir,
         "rootfs", "data", "data",
-        "com.apple.android.music", "files", "mpl_db", "kvs.sqlitedb"
+        "com.apple.android.music", "files", "mpl_db", "kvs.sqlitedb",
     )
 
-    # Convert Windows path → WSL path  (e.g. F:\Foo\Bar → /mnt/f/Foo/Bar)
     drive = wrapper_dir[0].lower()
     wsl_path = f"/mnt/{drive}/" + wrapper_dir[3:].replace("\\", "/")
 
-    # ── Step 3: Download wrapper binary if missing ─────────────
     if not os.path.exists(wrapper_binary):
         print("Downloading Wrapper binary for WSL...")
         url = (
@@ -86,7 +76,6 @@ def setup_wsl_wrapper() -> None:
     else:
         print("[OK] Wrapper binary already exists, skipping download.")
 
-    # ── Step 4: Set execute permission via WSL ─────────────────
     print("Setting execute permissions via WSL...")
     subprocess.run(
         ["wsl", "-e", "bash", "-c", f"chmod +x '{wsl_path}/wrapper'"],
@@ -94,62 +83,73 @@ def setup_wsl_wrapper() -> None:
     )
     print("[OK] Permissions set.")
 
-    # ── Step 5: Apple ID login ─────────────────────────────────
-    # Always perform login in the setup script — the user is explicitly
-    # setting up the Wrapper and expects to authenticate here.
     print()
     print("=" * 60)
-    print("  Apple ID Login")
+    print("  Apple ID Authentication")
     print("=" * 60)
-    print("  The Wrapper needs to authenticate with Apple Music.")
-    print("  All output from the Wrapper will appear below.")
-    print("  If a 2FA prompt appears, follow the on-screen instructions.")
-    print()
-    print("  NOTE: After a successful login the Wrapper will start")
-    print("        serving on ports 10020/20020/30020.")
-    print("        Press Ctrl+C once you see it running to stop it.")
-    print("        Your login session will be saved for future use.")
-    print("=" * 60)
+    print("  Enter your Apple ID credentials to authenticate the Wrapper.")
+    print("  These are sent directly to the local Wrapper process only.")
     print()
 
-    apple_id = input("  Enter your Apple ID (email): ").strip()
-    apple_pw = input("  Enter your Apple ID password: ").strip()
+    apple_id = input("  Apple ID (email): ").strip()
+    if not apple_id:
+        print("[CANCELLED] No Apple ID provided. Setup incomplete.")
+        return
+
+    import getpass
+    password = getpass.getpass("  Password: ").strip()
+    if not password:
+        print("[CANCELLED] No password provided. Setup incomplete.")
+        return
 
     print()
-    print("  Starting Wrapper — output below:")
-    print("-" * 60)
+    print("Authenticating with Apple Music (this may take a few moments)...")
+    login_arg = f"{apple_id}:{password}"
+    cmd = f"cd '{wsl_path}' && ./wrapper -L '{login_arg}'"
 
-    login_cmd = (
-        f"cd '{wsl_path}' && ./wrapper -L '{apple_id}:{apple_pw}' -H 0.0.0.0"
-    )
     try:
-        # Run WITHOUT capturing output: stdin/stdout/stderr are inherited from
-        # this terminal so the user sees all output and can respond to 2FA.
-        # The wrapper will serve on 10020/20020/30020 after login.
-        # Press Ctrl+C once you see it running to stop it and continue.
-        subprocess.run(["wsl", "-e", "bash", "-c", login_cmd])
-    except KeyboardInterrupt:
-        pass  # User pressed Ctrl+C after confirming the Wrapper is running.
+        proc = subprocess.Popen(
+            ["wsl", "-e", "bash", "-c", cmd],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
 
-    print()
-    print("-" * 60)
+        while True:
+            line = proc.stdout.readline()
+            if not line and proc.poll() is not None:
+                break
+            if line:
+                stripped = line.strip()
+                print(f"  [wrapper] {stripped}")
+                if "2FA" in stripped or "verification" in stripped.lower() or "code" in stripped.lower():
+                    code = input("  Enter 2FA Code: ").strip()
+                    proc.stdin.write(f"{code}\n")
+                    proc.stdin.flush()
 
-    # ── Step 6: Verify session was saved ──────────────────────
+        proc.wait()
+    except Exception as e:
+        print(f"[ERROR] Failed to run wrapper: {e}")
+        return
+
     if os.path.exists(session_db):
-        print("[OK] Session database found. Login successful.")
+        print()
+        print("=" * 60)
+        print("  [SUCCESS] Apple Music Wrapper is authenticated and ready!")
+        print("=" * 60)
     else:
-        print("[WARN] Session database not found at:")
-        print(f"       {session_db}")
-        print("       This may mean Ctrl+C was pressed before the session")
-        print("       was fully written. Try running this script again.")
-
-    print()
-    print("=" * 60)
-    print("  Setup complete!")
-    print("  Run 'launch.ps1' or the Desktop shortcut to start the app.")
-    print("=" * 60)
-    input("  Press Enter to exit...")
+        print()
+        print("[WARNING] Setup finished but session DB was not found.")
+        print("  You may need to run this script again or check your credentials.")
 
 
+# 兼容性别名
+check_wsl_installed = chkwslinst
+prompt_install_wsl = prmptinstwsl
+setup_wsl_wrapper = stwrprwsl
+
+
+# 命令行独立测试执行入口
 if __name__ == "__main__":
-    setup_wsl_wrapper()
+    stwrprwsl()

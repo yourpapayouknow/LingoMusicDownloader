@@ -1,64 +1,93 @@
-from pydantic_settings import BaseSettings
-import os
-import sys
+# 系统配置与运行环境路径管理模块
+from backend.head import BaseSettings, os, sys
+
 
 class Settings(BaseSettings):
+    # 核心配置项
     PROJECT_NAME: str = "LingoMusicDownloader Backend"
     API_V1_STR: str = "/api/v1"
-    
-    # Gamdl settings
     LOG_LEVEL: str = "INFO"
     DOWNLOAD_MODE: str = "ytdlp"
     SONG_CODEC_PRIORITY: str = "aac-legacy"
 
-    @property
-    def BASE_DIR(self) -> str:
-        if getattr(sys, 'frozen', False):
+    # 获取基础运行目录
+    def bsdir(self) -> str:
+        if getattr(sys, "frozen", False):
             return os.path.dirname(sys.executable)
         return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
+
+    # 获取打包资源目录
+    def bndldir(self) -> str:
+        if getattr(sys, "frozen", False):
+            return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+        return self.bsdir()
+
+    # 获取Cookie文件路径
+    def ckspth(self) -> str:
+        return os.path.join(self.bsdir(), "cookies.txt")
+
+    # 获取下载输出目录
+    def outpth(self) -> str:
+        return os.path.join(self.bsdir(), "Apple Music")
+
+    # 获取转换输出目录
+    def cnvtpth(self) -> str:
+        return os.path.join(self.bsdir(), "Converted")
+
+    # 获取二进制工具目录
+    def bindir(self) -> str:
+        candidates = [
+            os.path.join(self.bndldir(), "bin"),
+            os.path.join(self.bsdir(), "bin"),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return candidates[0]
+
+    # 获取FFmpeg可执行文件路径
+    def ffmpgpth(self) -> str:
+        p = os.path.join(self.bindir(), "ffmpeg", "ffmpeg.exe")
+        if os.path.exists(p):
+            return p
+        return os.path.join(self.bindir(), "ffmpeg.exe")
+
+    # 获取mp4decrypt可执行文件路径
+    def mp4dcrpth(self) -> str:
+        return os.path.join(self.bindir(), "mp4decrypt.exe")
+
+    # 属性映射适配
+    @property
+    def BASE_DIR(self) -> str:
+        return self.bsdir()
+
     @property
     def BUNDLE_DIR(self) -> str:
-        if getattr(sys, 'frozen', False):
-            return getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
-        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return self.bndldir()
 
     @property
     def COOKIES_PATH(self) -> str:
-        return os.path.join(self.BASE_DIR, "cookies.txt")
+        return self.ckspth()
 
     @property
     def OUTPUT_PATH(self) -> str:
-        return os.path.join(self.BASE_DIR, "Apple Music")
+        return self.outpth()
 
     @property
     def CONVERTED_PATH(self) -> str:
-        return os.path.join(self.BASE_DIR, "Converted")
+        return self.cnvtpth()
 
     @property
     def BIN_DIR(self) -> str:
-        candidates = [
-            os.path.join(self.BUNDLE_DIR, "bin"),
-            os.path.join(self.BASE_DIR, "bin"),
-        ]
+        return self.bindir()
 
-        for candidate in candidates:
-            if os.path.exists(candidate):
-                return candidate
-
-        return candidates[0]
-    
     @property
     def FFMPEG_PATH(self) -> str:
-        # Check in bin/ffmpeg/ffmpeg.exe
-        path = os.path.join(self.BIN_DIR, "ffmpeg", "ffmpeg.exe")
-        if os.path.exists(path):
-            return path
-        # Fallback to bin/ffmpeg.exe
-        return os.path.join(self.BIN_DIR, "ffmpeg.exe")
-        
+        return self.ffmpgpth()
+
     @property
     def MP4DECRYPT_PATH(self) -> str:
-        return os.path.join(self.BIN_DIR, "mp4decrypt.exe")
+        return self.mp4dcrpth()
+
 
 settings = Settings()

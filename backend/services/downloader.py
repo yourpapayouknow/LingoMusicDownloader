@@ -1,21 +1,11 @@
-import asyncio
-import os
-import logging
-import subprocess
-import socket
-import re
-import shutil
-import tempfile
-import unicodedata
-from http.cookiejar import MozillaCookieJar
-from pathlib import Path
-from typing import Dict, Any, Optional, List
-from urllib.parse import urljoin, urlparse, urlunparse
-from urllib.request import Request, urlopen
+# 核心下载调度器、多线程队列与音质转码引擎模块
+from backend.head import (
+    asyncio, os, logging, subprocess, socket, re, shutil, tempfile,
+    unicodedata, MozillaCookieJar, Path, Dict, Any, Optional, List,
+    urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen, httpx
+)
 
-import httpx
-
-from backend.db.database import insert_history, get_all_settings
+from backend.db.database import inshstry as insert_history, gtallstngs as get_all_settings
 
 from gamdl.api.exceptions import GamdlApiResponseError
 from gamdl.interface.exceptions import (
