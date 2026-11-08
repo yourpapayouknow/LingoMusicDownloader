@@ -16,10 +16,13 @@ $PrimaryProjectDir = if ($ProjectName -like "*_legacy") {
 }
 
 $LocalVenvPython = Join-Path $ProjectDir "venv\Scripts\python.exe"
+$LocalDotVenvPython = Join-Path $ProjectDir ".venv\Scripts\python.exe"
 $SharedVenvPython = Join-Path $PrimaryProjectDir "venv\Scripts\python.exe"
-$VenvPython = $null
+$SharedDotVenvPython = Join-Path $PrimaryProjectDir ".venv\Scripts\python.exe"
+$VenvPython = if (Test-Path $LocalDotVenvPython) { $LocalDotVenvPython } elseif (Test-Path $LocalVenvPython) { $LocalVenvPython } else { $null }
 $RequirementsFile = Join-Path $ProjectDir "backend\requirements.txt"
-$RequirementsStamp = Join-Path $ProjectDir "venv\.backend_requirements.sha256"
+$PyprojectFile = Join-Path $ProjectDir "pyproject.toml"
+$RequirementsStamp = Join-Path $ProjectDir ".venv\.backend_requirements.sha256"
 
 $BackendEntry = Join-Path $ProjectDir "run_backend.py"
 $BackendOut = Join-Path $ProjectDir "backend_live.out"
@@ -174,7 +177,28 @@ function Ensure-FrontendDependencies {
     Write-Host "  [OK] Legacy frontend dependencies are ready." -ForegroundColor Green
 }
 
+function Resolve-UvBinary {
+    # 查找uv可执行文件
+    $uvCmd = Get-Command "uv" -ErrorAction SilentlyContinue
+    if ($uvCmd) {
+        return $uvCmd.Source
+    }
+    $userUv = Join-Path $env:USERPROFILE ".local\bin\uv.exe"
+    if (Test-Path $userUv) {
+        return $userUv
+    }
+    return $null
+}
+
 function Resolve-BootstrapPython {
+    # 查找可用的Python引导解释器
+    if (Test-Path $SharedDotVenvPython) {
+        return @{
+            Path = $SharedDotVenvPython
+            PrefixArgs = @()
+        }
+    }
+
     if (Test-Path $SharedVenvPython) {
         return @{
             Path = $SharedVenvPython
@@ -202,10 +226,53 @@ function Resolve-BootstrapPython {
 }
 
 function Ensure-LegacyPythonEnv {
+    # 确保遗留端Python虚拟环境与依赖就绪
+    $uvExe = Resolve-UvBinary
+    if ($uvExe) {
+        if (-not (Test-Path $LocalDotVenvPython)) {
+            Write-Host "  [INFO] Creating isolated legacy Python environment with uv..." -ForegroundColor Gray
+            & $uvExe venv (Join-Path $ProjectDir ".venv") --python 3.11
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $LocalDotVenvPython)) {
+                Write-Host "  [ERROR] Failed to create the legacy virtual environment via uv." -ForegroundColor Red
+                Read-Host "`n  Press Enter to exit"
+                exit 1
+            }
+        }
+
+        $syncTarget = if (Test-Path $PyprojectFile) { $PyprojectFile } else { $RequirementsFile }
+        $currentHash = (Get-FileHash -Algorithm SHA256 $syncTarget).Hash
+        $storedHash = if (Test-Path $RequirementsStamp) {
+            (Get-Content $RequirementsStamp -ErrorAction SilentlyContinue | Select-Object -First 1)
+        } else {
+            ""
+        }
+
+        if ($currentHash -ne $storedHash) {
+            Write-Host "  [INFO] Syncing legacy backend dependencies with uv..." -ForegroundColor Gray
+            Push-Location $ProjectDir
+            try {
+                & $uvExe sync
+            } finally {
+                Pop-Location
+            }
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "  [ERROR] Failed to install legacy backend dependencies via uv." -ForegroundColor Red
+                Read-Host "`n  Press Enter to exit"
+                exit 1
+            }
+            Set-Content -Path $RequirementsStamp -Value $currentHash -Encoding ASCII
+            Write-Host "  [OK] Legacy backend dependencies are ready (uv)." -ForegroundColor Green
+        }
+
+        $script:VenvPython = $LocalDotVenvPython
+        $VenvPython = $LocalDotVenvPython
+        return
+    }
+
     $bootstrap = Resolve-BootstrapPython
     if ($null -eq $bootstrap) {
         Write-Host "  [ERROR] Missing Python interpreter for legacy environment bootstrap." -ForegroundColor Red
-        Write-Host "          Checked shared venv plus PATH commands: python / py" -ForegroundColor Yellow
+        Write-Host "          Checked shared venv plus PATH commands: python / py / uv" -ForegroundColor Yellow
         Read-Host "`n  Press Enter to exit"
         exit 1
     }
@@ -216,7 +283,8 @@ function Ensure-LegacyPythonEnv {
         exit 1
     }
 
-    if (-not (Test-Path $LocalVenvPython)) {
+    $targetVenv = if (Test-Path $LocalDotVenvPython) { $LocalDotVenvPython } else { $LocalVenvPython }
+    if (-not (Test-Path $targetVenv)) {
         Write-Host "  [INFO] Creating isolated legacy Python environment..." -ForegroundColor Gray
         $createArgs = @($bootstrap.PrefixArgs + @("-m", "venv", (Join-Path $ProjectDir "venv")))
         & $bootstrap.Path @createArgs
@@ -225,6 +293,7 @@ function Ensure-LegacyPythonEnv {
             Read-Host "`n  Press Enter to exit"
             exit 1
         }
+        $targetVenv = $LocalVenvPython
     }
 
     $requirementsHash = (Get-FileHash -Algorithm SHA256 $RequirementsFile).Hash
@@ -236,13 +305,13 @@ function Ensure-LegacyPythonEnv {
 
     if ($requirementsHash -ne $storedHash) {
         Write-Host "  [INFO] Syncing legacy backend dependencies..." -ForegroundColor Gray
-        & $LocalVenvPython -m pip install --upgrade pip
+        & $targetVenv -m pip install --upgrade pip
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  [ERROR] Failed to upgrade pip in the legacy environment." -ForegroundColor Red
             Read-Host "`n  Press Enter to exit"
             exit 1
         }
-        & $LocalVenvPython -m pip install -r $RequirementsFile
+        & $targetVenv -m pip install -r $RequirementsFile
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  [ERROR] Failed to install legacy backend dependencies." -ForegroundColor Red
             Read-Host "`n  Press Enter to exit"
@@ -252,7 +321,8 @@ function Ensure-LegacyPythonEnv {
         Write-Host "  [OK] Legacy backend dependencies are ready." -ForegroundColor Green
     }
 
-    $script:VenvPython = $LocalVenvPython
+    $script:VenvPython = $targetVenv
+    $VenvPython = $targetVenv
 }
 
 function Wait-BackendReady {
