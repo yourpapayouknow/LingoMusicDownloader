@@ -1969,18 +1969,18 @@ export default function App() {
         <div className="am-player">
           <div className="am-controls">
             <button className="am-btn" onClick={handlePrev} title="上一首">
-              <Icon name="prev" size={16} />
+              <Icon name="prev" size={16} filled />
             </button>
-            <button 
-              className="am-btn" 
-              onClick={handlePlayPause} 
-              style={{ width: '36px', height: '36px' }} 
+            <button
+              className="am-btn"
+              onClick={handlePlayPause}
+              style={{ width: '36px', height: '36px' }}
               title={isPlaying ? '暂停' : '试听预览'}
             >
-              <Icon name={isPlaying ? 'pause' : 'play'} size={19} />
+              <Icon name={isPlaying ? 'pause' : 'play'} size={19} filled />
             </button>
             <button className="am-btn" onClick={handleNext} title="下一首">
-              <Icon name="next" size={16} />
+              <Icon name="next" size={16} filled />
             </button>
           </div>
 
@@ -2011,7 +2011,7 @@ export default function App() {
 
           <div className="am-volume-wrapper">
             <button className="am-btn" onClick={toggleMute} title={isMuted ? '取消静音' : '静音'}>
-              <Icon name={isMuted || volume === 0 ? 'volumeMute' : 'volume'} size={15} />
+              <Icon name={isMuted || volume === 0 ? 'volumeMute' : 'volume'} size={15} filled={isMuted || volume === 0} />
             </button>
             <input
               type="range"
@@ -2039,7 +2039,7 @@ export default function App() {
               onClick={() => setIsShuffle(!isShuffle)}
               title="随机试听"
             >
-              <Icon name="shuffle" size={14} />
+              <Icon name="shuffle" size={14} filled={isShuffle} />
             </button>
             <button
               className="am-btn"
@@ -2047,7 +2047,7 @@ export default function App() {
               onClick={() => setIsRepeat(!isRepeat)}
               title="单曲循环"
             >
-              <Icon name="repeat" size={14} />
+              <Icon name="repeat" size={14} filled={isRepeat} />
             </button>
           </div>
           <div className="am-progress-edge-wrapper">
@@ -2084,7 +2084,7 @@ export default function App() {
             }}
             title="歌词"
           >
-            <Icon name="lyrics" size={16} />
+            <Icon name="lyrics" size={16} filled={lyricsOpen} />
           </IconButton>
           <IconButton
             variant={playlistOpen ? 'primary' : 'ghost'}
@@ -2096,7 +2096,7 @@ export default function App() {
             }}
             title={`播放列表 (${playlistEntries.length})`}
           >
-            <Icon name="playlist" size={16} />
+            <Icon name="playlist" size={16} filled={playlistOpen} />
           </IconButton>
           <Toggle checked={mode === 'dark'} onChange={toggleMode} label={mode === 'dark' ? '深色' : '浅色'} />
 
@@ -2259,7 +2259,7 @@ export default function App() {
                             onClick={() => playPlaylistEntryByKey(entry.key)}
                             title="播放"
                           >
-                            <Icon name="play" size={12} />
+                            <Icon name="play" size={12} filled={isCurrent} />
                           </IconButton>
                           <IconButton
                             variant="ghost"
@@ -2417,7 +2417,7 @@ export default function App() {
                                   onClick={() => playTrackPreview(item)}
                                   title="试听"
                                 >
-                                  <Icon name={isCurrentPlaying && isPlaying ? 'pause' : 'play'} size={14} />
+                                  <Icon name={isCurrentPlaying && isPlaying ? 'pause' : 'play'} size={14} filled={isCurrentPlaying && isPlaying} />
                                 </IconButton>
                               )}
                               <Button
@@ -2572,7 +2572,7 @@ export default function App() {
                                           onClick={() => playLocalTrack(item)}
                                           title="播放"
                                         >
-                                          <Icon name="play" size={14} />
+                                          <Icon name="play" size={14} filled={playingTrack?.id === (item.trackId || item.id) && isPlaying} />
                                         </IconButton>
                                         <IconButton
                                           variant="ghost"
@@ -2633,7 +2633,7 @@ export default function App() {
                                           title="播放单曲"
                                           disabled={track.status !== 'completed'}
                                         >
-                                          <Icon name="play" size={11} />
+                                          <Icon name="play" size={11} filled={playingTrack?.id === track.trackId && isPlaying} />
                                         </IconButton>
                                         <IconButton
                                           variant="ghost"
@@ -2777,7 +2777,7 @@ export default function App() {
                                           }}
                                           title="本地播放"
                                         >
-                                          <Icon name="play" size={11} />
+                                          <Icon name="play" size={11} filled={playingTrack?.id === track.track_id && isPlaying} />
                                         </IconButton>
                                         <IconButton
                                           variant="ghost"
@@ -3714,10 +3714,10 @@ export default function App() {
         active={activeTab}
         onChange={(val: any) => setActiveTab(val)}
         items={[
-          { value: 'search', label: '搜索', icon: <Icon name="search" size={20} /> },
-          { value: 'download', label: '下载', icon: <Icon name="download" size={20} />, badge: downloadingCount > 0 ? downloadingCount : undefined },
-          { value: 'settings', label: '设置', icon: <Icon name="settings" size={20} /> },
-          { value: 'about', label: '关于', icon: <Icon name="user" size={20} /> },
+          { value: 'search', label: '搜索', icon: <Icon name="search" size={20} filled={activeTab === 'search'} /> },
+          { value: 'download', label: '下载', icon: <Icon name="download" size={20} filled={activeTab === 'download'} />, badge: downloadingCount > 0 ? downloadingCount : undefined },
+          { value: 'settings', label: '设置', icon: <Icon name="settings" size={20} filled={activeTab === 'settings'} /> },
+          { value: 'about', label: '关于', icon: <Icon name="info" size={20} filled={activeTab === 'about'} /> },
         ]}
       />
     </div>

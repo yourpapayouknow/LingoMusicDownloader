@@ -60,6 +60,7 @@ LingoMusicDownloader is a Tauri + React desktop application for Apple Music loss
 - **Pill Radius** (`--radius-full`): `9999px` (badges, toggles, avatars, segmented controls)
 
 ## Components
+- **`Icon` (`@mingcute/react`)**: Unified icon system sourced from `mingcute-icons` (`24×24` grid), centrally imported in `frontend/src/head.ts` and exposed via `<Icon name="..." filled={boolean} />` in `frontend/src/ui/primitives.tsx`. Uses **Core Regular** as the default outline style and **Core Filled** (`filled={true}`) for active navigation tabs, active player/panel toggles, and playback transport controls.
 - **`Button` / `IconButton`**: Variants `primary`, `secondary`, `ghost`; sizes `sm`, `md`, `lg`; orange focus glow (`--focus-glow`).
 - **`Menu` (Select Dropdown)**: Wrapped in `.ui-field.ui-menu-field` -> `.ui-select-wrap` with custom chevron icon and disabled opacity/cursor state. Used in Settings for audio codec, MV resolution, and metadata region selection.
 - **`Toggle`**: Pill track switch for boolean settings (Wrapper lossless toggle, transcoding options).
