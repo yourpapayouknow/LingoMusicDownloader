@@ -398,11 +398,28 @@ export default function App() {
     let loginWindowSession: { label: string; close: () => Promise<void> } | null = null
     let liveCookieContent = ''
     let liveCookieCount = 0
+    let observedPreLoginCookies = false
 
     const stopProbe = () => {
       if (probeTimer !== null) {
         window.clearInterval(probeTimer)
         probeTimer = null
+      }
+    }
+
+    // 窗口销毁前优先通过Tauri内存接口抓取最新Cookies
+    const captureLiveCookiesBeforeClose = async (windowLabel: string) => {
+      try {
+        const probe = await probeAppleMusicLoginWindowCookies(windowLabel)
+        if (probe.cookiesCount > 0) {
+          observedPreLoginCookies = true
+        }
+        if (probe.loginDetected && probe.cookiesContent?.trim()) {
+          liveCookieContent = probe.cookiesContent
+          liveCookieCount = probe.cookiesCount || liveCookieCount
+        }
+      } catch (e) {
+        console.warn('Pre-close cookie capture failed', e)
       }
     }
 
@@ -413,8 +430,9 @@ export default function App() {
       loginFinalizeRef.current = null
       loginWindowSessionRef.current = null
 
-      // Wait briefly for WebView2 to flush/release cookie DB handles.
-      await new Promise((resolve) => window.setTimeout(resolve, 900))
+      const hasCapturedLive = Boolean(liveCookieContent.trim())
+      // 若已通过内存抓取到Cookies则无需久等磁盘句柄释放
+      await new Promise((resolve) => window.setTimeout(resolve, hasCapturedLive ? 100 : 900))
       try {
         let result: { success: boolean; message: string; cookies_count: number }
         const content = liveCookieContent.trim()
@@ -424,6 +442,12 @@ export default function App() {
             success: Boolean(saveResult.success),
             message: saveResult.message || 'Cookies 已保存并完成初始化',
             cookies_count: liveCookieCount || content.split('\n').filter((line) => line.trim() && !line.startsWith('#')).length,
+          }
+        } else if (observedPreLoginCookies) {
+          result = {
+            success: false,
+            message: '未检测到完整 Apple Music 登录态（缺少 media-user-token），请先在弹窗内完成账号登录再关闭。',
+            cookies_count: 0,
           }
         } else {
           const finalizedResult = await finalizeCookieLogin({
@@ -468,6 +492,9 @@ export default function App() {
       probeInFlight = true
       try {
         const probe = await probeAppleMusicLoginWindowCookies(loginWindowSession.label)
+        if (probe.cookiesCount > 0) {
+          observedPreLoginCookies = true
+        }
         if (probe.loginDetected && probe.cookiesContent?.trim()) {
           liveCookieContent = probe.cookiesContent
           liveCookieCount = probe.cookiesCount || liveCookieCount
@@ -476,7 +503,7 @@ export default function App() {
             await loginWindowSession?.close()
             window.setTimeout(() => {
               void finalizeAfterWindowClosed()
-            }, 1200)
+            }, 600)
           } catch (e) {
             console.warn('Auto close login window failed, fallback to finalize', e)
             void finalizeAfterWindowClosed()
@@ -499,6 +526,7 @@ export default function App() {
     try {
       loginWindowSession = await openAppleMusicLoginWindow({
         dataDirectory: 'apple-music-login',
+        onBeforeClose: captureLiveCookiesBeforeClose,
         onClosed: () => {
           void finalizeAfterWindowClosed()
         },
@@ -527,7 +555,7 @@ export default function App() {
       pushToast('请先登录', '登录 Apple Music 后系统会尝试自动完成；若未自动关闭，可点击右上角 X 或“完成登录并继续”。', 'info')
       probeTimer = window.setInterval(() => {
         void probeLoginState()
-      }, 2200)
+      }, 1200)
       void probeLoginState()
     } catch (err: any) {
       console.error(err)

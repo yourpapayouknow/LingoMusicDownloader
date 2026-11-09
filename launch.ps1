@@ -392,8 +392,8 @@ if ($null -ne $existingFrontend) {
     Write-Host "  [OK] Legacy release app started." -ForegroundColor Green
 } else {
     Write-Host "  [INFO] No legacy release build found, starting 'npm run tauri dev'..." -ForegroundColor Gray
-    Start-Process -FilePath "cmd.exe" `
-        -ArgumentList "/K", "cd /d `"$FrontendDir`" && npm run tauri dev" `
+    Start-Process -FilePath "pwsh" `
+        -ArgumentList "-NoLogo", "-NoExit", "-Command", "npm run tauri dev" `
         -WorkingDirectory $FrontendDir | Out-Null
     Write-Host "  [OK] Legacy dev mode command launched." -ForegroundColor Green
 }

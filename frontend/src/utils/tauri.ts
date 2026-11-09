@@ -16,6 +16,7 @@ export interface AppleMusicLoginProbeResult {
 
 export interface OpenAppleMusicLoginOptions {
   dataDirectory?: string
+  onBeforeClose?: (windowLabel: string) => Promise<void> | void
   onClosed?: () => void
   onError?: (message: string) => void
 }
@@ -124,10 +125,34 @@ export async function opnapllgn(
     return null
   }
 
+  let capturedBeforeClose = false
+  const captureBeforeClose = async () => {
+    if (capturedBeforeClose) return
+    capturedBeforeClose = true
+    try {
+      await options.onBeforeClose?.(label)
+    } catch (e) {
+      console.warn('onBeforeClose handler failed', e)
+    }
+  }
+
+  let unlistenCloseRequested: (() => void) | null = null
+  try {
+    unlistenCloseRequested = await loginWindow.onCloseRequested(async () => {
+      await captureBeforeClose()
+    })
+  } catch (e) {
+    console.warn('Register onCloseRequested failed', e)
+  }
+
   let finalized = false
   const notifyClosed = () => {
     if (finalized) return
     finalized = true
+    if (unlistenCloseRequested) {
+      unlistenCloseRequested()
+      unlistenCloseRequested = null
+    }
     options.onClosed?.()
   }
 
@@ -135,7 +160,10 @@ export async function opnapllgn(
 
   return {
     label,
-    close: () => loginWindow.close(),
+    close: async () => {
+      await captureBeforeClose()
+      await loginWindow.close()
+    },
   }
 }
 

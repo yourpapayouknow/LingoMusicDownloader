@@ -86,7 +86,7 @@ async fn probe_apple_music_login_cookies(
       }
 
       if cookie.name().eq_ignore_ascii_case("media-user-token")
-        && domain.to_ascii_lowercase().contains("music.apple.com")
+        && is_apple_cookie_domain(domain)
       {
         has_media_user_token = true;
       }

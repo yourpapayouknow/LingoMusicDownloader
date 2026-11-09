@@ -413,10 +413,15 @@ def exptaplcks(
             all_cookies = cookies
 
     if not all_cookies:
-        detail = f" 读取错误：{read_errors[0]}" if read_errors else ""
+        err_text = read_errors[0] if read_errors else ""
+        if "Permission denied" in err_text or "unable to open database file" in err_text:
+            msg = "WebView2 正在独占占用 Cookies 数据库，无法从磁盘直接读取；请等待窗口内自动识别，或重新点击登录并在完成登录后再关闭窗口。"
+        else:
+            detail = f" 读取错误：{err_text}" if err_text else ""
+            msg = "检测到 Cookies 数据库，但未提取到可用的 Apple 登录 Cookies。" + detail
         return {
             "success": False,
-            "message": "检测到 Cookies 数据库，但未提取到可用的 Apple 登录 Cookies。" + detail,
+            "message": msg,
             "cookies_count": 0,
             "has_media_user_token": False,
         }
