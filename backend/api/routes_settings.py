@@ -88,6 +88,7 @@ async def hlthchkrtr() -> Dict[str, Any]:
             },
             "cookies_ok": cookies_ok,
             "downloader_initialized": manager.is_initialized,
+            "account_storefront": (getattr(manager.apple_music_api, "storefront", "") or "").lower(),
         }
         _health_cache = (time.time(), payload)
         return payload

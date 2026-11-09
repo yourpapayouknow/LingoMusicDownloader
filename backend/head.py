@@ -4,6 +4,7 @@
 import sys
 import io
 import os
+import copy
 import multiprocessing as mp
 import logging
 import asyncio
@@ -58,7 +59,7 @@ from gamdl.interface.exceptions import (
     GamdlInterfaceDecryptionNotAvailableError,
     GamdlInterfaceFormatNotAvailableError,
 )
-from gamdl.api import AppleMusicApi
+from gamdl.api import AppleMusicApi, ItunesApi
 from gamdl.downloader import (
     AppleMusicBaseDownloader,
     AppleMusicDownloader,
@@ -85,6 +86,7 @@ __all__ = [
     "sys",
     "io",
     "os",
+    "copy",
     "mp",
     "logging",
     "asyncio",

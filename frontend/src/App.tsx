@@ -60,7 +60,40 @@ import { minimizeWindow, maximizeWindow, closeWindow, isTauri, openAppleMusicLog
 // Settings keys
 const SETTINGS_KEY_CODEC = 'lingomusic-codec'
 const SETTINGS_KEY_RESOLUTION = 'lingomusic-resolution'
+const SETTINGS_KEY_METADATA_REGION = 'lingomusic-metadata-region'
 const SETTINGS_KEY_USE_WRAPPER = 'lingomusic-use-wrapper'
+
+// 支持自由切换的音频元数据地区预设列表
+const METADATA_REGION_PRESETS = [
+  { label: '中国大陆(简体中文)', value: 'cn' },
+  { label: '中国香港(繁体中文)', value: 'hk' },
+  { label: '中国台湾(繁体中文)', value: 'tw' },
+  { label: '日本(日语)', value: 'jp' },
+  { label: '韩国(韩语)', value: 'kr' },
+  { label: '美国(英语)', value: 'us' },
+  { label: '英国(英语)', value: 'gb' },
+  { label: '新加坡(英语)', value: 'sg' },
+  { label: '澳大利亚(英语)', value: 'au' },
+  { label: '加拿大(英语)', value: 'ca' },
+  { label: '德国(德语)', value: 'de' },
+  { label: '法国(法语)', value: 'fr' },
+  { label: '西班牙(西班牙语)', value: 'es' },
+  { label: '意大利(意大利语)', value: 'it' },
+  { label: '巴西(葡萄牙语)', value: 'br' },
+  { label: '俄罗斯(俄语)', value: 'ru' },
+  { label: '马来西亚(马来语)', value: 'my' },
+  { label: '泰国(泰语)', value: 'th' },
+  { label: '越南(越南语)', value: 'vn' },
+  { label: '印度尼西亚(印尼语)', value: 'id' },
+  { label: '墨西哥(西班牙语)', value: 'mx' },
+  { label: '荷兰(荷兰语)', value: 'nl' },
+  { label: '葡萄牙(葡萄牙语)', value: 'pt' },
+  { label: '印度(英语)', value: 'in' },
+  { label: '菲律宾(英语)', value: 'ph' },
+  { label: '土耳其(土耳其语)', value: 'tr' },
+  { label: '沙特阿拉伯(阿拉伯语)', value: 'sa' },
+  { label: '阿联酋(阿拉伯语)', value: 'ae' },
+]
 const SETTINGS_KEY_VOLUME = 'lingomusic-volume'
 const SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320 = 'lingomusic-transcode-aac-to-mp3-320'
 const SETTINGS_KEY_TRANSCODE_AAC_TO_MP4 = 'lingomusic-transcode-aac-to-mp4'
@@ -232,6 +265,7 @@ export default function App() {
   // Settings State (persisted in localStorage)
   const [codec, setCodec] = useState(() => localStorage.getItem(SETTINGS_KEY_CODEC) || 'aac-legacy')
   const [resolution, setResolution] = useState(() => localStorage.getItem(SETTINGS_KEY_RESOLUTION) || '1080p')
+  const [metadataRegion, setMetadataRegion] = useState(() => localStorage.getItem(SETTINGS_KEY_METADATA_REGION) || 'auto')
   const [useWrapper, setUseWrapper] = useState(() => localStorage.getItem(SETTINGS_KEY_USE_WRAPPER) === 'true')
   const [transcodeAacToMp3_320, setTranscodeAacToMp3_320] = useState(() => localStorage.getItem(SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320) === 'true')
   const [transcodeAacToMp4, setTranscodeAacToMp4] = useState(() => localStorage.getItem(SETTINGS_KEY_TRANSCODE_AAC_TO_MP4) === 'true')
@@ -1000,9 +1034,11 @@ export default function App() {
   // Persist Settings to API
   useEffect(() => {
     if (!settingsLoaded) return
+    localStorage.setItem(SETTINGS_KEY_METADATA_REGION, metadataRegion)
     saveSettingsApi({
       [SETTINGS_KEY_CODEC]: codec,
       [SETTINGS_KEY_RESOLUTION]: resolution,
+      [SETTINGS_KEY_METADATA_REGION]: metadataRegion,
       [SETTINGS_KEY_USE_WRAPPER]: useWrapper,
       [SETTINGS_KEY_VOLUME]: volume,
       [SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320]: transcodeAacToMp3_320,
@@ -1015,6 +1051,7 @@ export default function App() {
   }, [
     codec,
     resolution,
+    metadataRegion,
     useWrapper,
     volume,
     transcodeAacToMp3_320,
@@ -1160,6 +1197,11 @@ export default function App() {
     getSettingsApi().then(settings => {
       if (settings[SETTINGS_KEY_CODEC]) setCodec(String(settings[SETTINGS_KEY_CODEC]))
       if (settings[SETTINGS_KEY_RESOLUTION]) setResolution(String(settings[SETTINGS_KEY_RESOLUTION]))
+      if (settings[SETTINGS_KEY_METADATA_REGION]) {
+        const regionVal = String(settings[SETTINGS_KEY_METADATA_REGION])
+        setMetadataRegion(regionVal)
+        localStorage.setItem(SETTINGS_KEY_METADATA_REGION, regionVal)
+      }
       if (settings[SETTINGS_KEY_USE_WRAPPER] !== undefined) setUseWrapper(settings[SETTINGS_KEY_USE_WRAPPER] === 'true' || settings[SETTINGS_KEY_USE_WRAPPER] === true)
       if (settings[SETTINGS_KEY_VOLUME]) {
         const v = parseFloat(String(settings[SETTINGS_KEY_VOLUME]))
@@ -1502,7 +1544,7 @@ export default function App() {
 
     // Submit to backend API
     try {
-      await submitDownload(trackUrl, codec, resolution, useWrapper)
+      await submitDownload(trackUrl, codec, resolution, useWrapper, metadataRegion)
       // Trigger instant poll to show the new item
       setTimeout(fetchStatusAndHealth, 500)
     } catch (err: any) {
@@ -2937,6 +2979,24 @@ export default function App() {
                           { label: '4K Ultra HD (极高清品质)', value: '4k' }
                         ] : [
                           { label: '不可用 (请开启本地解密辅助代理)', value: 'unavailable' }
+                        ]}
+                      />
+
+                      <Divider />
+
+                      <Menu
+                        label="设定音频元数据地区"
+                        title="默认跟随账号地区，也可自由切换其他地区下载元数据"
+                        value={metadataRegion}
+                        onChange={(e) => setMetadataRegion(e.target.value)}
+                        options={[
+                          {
+                            label: healthStatus?.account_storefront
+                              ? `跟随账号(${healthStatus.account_storefront.toUpperCase()})`
+                              : '跟随账号地区',
+                            value: 'auto',
+                          },
+                          ...METADATA_REGION_PRESETS,
                         ]}
                       />
 

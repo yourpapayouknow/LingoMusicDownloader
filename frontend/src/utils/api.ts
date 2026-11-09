@@ -27,6 +27,7 @@ export interface HealthStatus {
   }
   cookies_ok: boolean
   downloader_initialized: boolean
+  account_storefront?: string
 }
 
 export interface SearchResult {
@@ -219,11 +220,18 @@ export async function sbmtdwnld(
   url: string,
   codec: string,
   videoResolution: string,
-  useWrapper: boolean
+  useWrapper: boolean,
+  metadataRegion?: string
 ): Promise<{ message: string; url: string }> {
   return postjson<{ message: string; url: string }>(
     `${BASE_URL}/download`,
-    { url, codec, video_resolution: videoResolution, use_wrapper: useWrapper },
+    {
+      url,
+      codec,
+      video_resolution: videoResolution,
+      use_wrapper: useWrapper,
+      metadata_region: metadataRegion,
+    },
     'Failed to submit download'
   )
 }

@@ -1,12 +1,12 @@
 # 核心下载调度器、多线程队列与音质转码引擎模块
 from backend.head import (
-    asyncio, os, logging, subprocess, socket, re, shutil, tempfile,
+    asyncio, copy, os, logging, subprocess, socket, re, shutil, tempfile,
     unicodedata, MozillaCookieJar, Path, Dict, Any, Optional, List,
     urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen, httpx,
     m3u8, YoutubeDL, Retry, RetryTransport,
     APPLE_MUSIC_AMP_API_URL, GamdlApiResponseError,
     GamdlInterfaceDecryptionNotAvailableError, GamdlInterfaceFormatNotAvailableError,
-    AppleMusicApi,
+    AppleMusicApi, ItunesApi,
     AppleMusicBaseDownloader, AppleMusicDownloader, AppleMusicMusicVideoDownloader,
     AppleMusicSongDownloader, AppleMusicUploadedVideoDownloader,
     DownloadMode, GamdlDownloaderMediaFileExistsError,
@@ -35,6 +35,7 @@ SETTINGS_KEY_TRANSCODE_AAC_TO_AAC_STANDARD = "lingomusic-transcode-aac-to-aac-st
 SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC = "lingomusic-transcode-alac-to-flac"
 SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV = "lingomusic-transcode-alac-to-wav"
 SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4 = "lingomusic-transcode-alac-to-mp4"
+SETTINGS_KEY_METADATA_REGION = "lingomusic-metadata-region"
 
 TRANSCODE_TRUE_VALUES = {"1", "true", "yes", "on"}
 # HLS 分片的 codecs 字段用 MP4A 对象类型标识，音频资产元数据用简写标识
@@ -183,6 +184,53 @@ async def _resolve_storefront_language(
     return _resolve_storefront_language_sync(sf)
 
 
+# 解析最终生效的元数据区域与语言标签
+async def _resolve_target_metadata_region_and_language(
+    account_storefront: Optional[str],
+    requested_region: Optional[str],
+    token: Optional[str] = None,
+    media_user_token: Optional[str] = None,
+) -> tuple[str, str]:
+    raw_region = (requested_region or "").strip().lower()
+    base_sf = (account_storefront or "cn").strip().lower() or "cn"
+    target_sf = base_sf if (not raw_region or raw_region == "auto") else raw_region
+    target_lang = await _resolve_storefront_language(
+        target_sf,
+        token=token,
+        media_user_token=media_user_token,
+    )
+    return target_sf, target_lang
+
+
+# 拉取指定Storefront区域下的目录媒体元数据
+async def _fetch_catalog_metadata_for_storefront(
+    apple_music_api: Any,
+    media_type: str,
+    media_id: str,
+    target_storefront: str,
+    target_language: str,
+) -> Optional[Dict[str, Any]]:
+    if not apple_music_api or not media_id or not target_storefront:
+        return None
+    try:
+        payload = await apple_music_api._amp_request(
+            f"/v1/catalog/{target_storefront}/{media_type}/{media_id}",
+            {"l": target_language},
+        )
+        data = payload.get("data", []) if isinstance(payload, dict) else []
+        if data and isinstance(data[0], dict):
+            return data[0]
+    except Exception as e:
+        logger.debug(
+            "Target storefront catalog lookup skipped (%s/%s/%s): %s",
+            target_storefront,
+            media_type,
+            media_id,
+            e,
+        )
+    return None
+
+
 # 从目录属性提取首选非泛化流派名称
 def _pick_catalog_genre(genre_names: Any) -> Optional[str]:
     if not isinstance(genre_names, list):
@@ -194,7 +242,7 @@ def _pick_catalog_genre(genre_names: Any) -> Optional[str]:
     return cleaned[0] if cleaned else None
 
 
-# 判断流媒体标签是否应替换为账户区目录本地化文本
+# 判断流媒体标签是否应替换为目标区域目录本地化文本
 def _should_use_catalog_text(
     tag_value: Optional[str],
     catalog_value: Optional[str],
@@ -212,9 +260,36 @@ def _should_use_catalog_text(
     if sf in CJK_PREFERRED_STOREFRONTS:
         if cur_text.isascii() and not cat_text.isascii():
             return True
-        if sf == "cn" and not cat_text.isascii():
+        if sf in {"cn", "tw", "hk", "mo"} and not cat_text.isascii():
+            return True
+    elif sf:
+        if not cur_text.isascii() and cat_text.isascii():
             return True
     return False
+
+
+# 仅填补缺失或为空的元数据标签字段
+def _fill_missing_tags_from_catalog(
+    tags: Any,
+    media_metadata: Optional[Dict[str, Any]],
+) -> None:
+    if tags is None or not isinstance(media_metadata, dict):
+        return
+    attrs = media_metadata.get("attributes")
+    if not isinstance(attrs, dict):
+        return
+    if not (getattr(tags, "title", None) or "").strip() and attrs.get("name"):
+        tags.title = attrs["name"]
+    if not (getattr(tags, "artist", None) or "").strip() and attrs.get("artistName"):
+        tags.artist = attrs["artistName"]
+    if not (getattr(tags, "album", None) or "").strip() and attrs.get("albumName"):
+        tags.album = attrs["albumName"]
+    if not (getattr(tags, "album_artist", None) or "").strip() and attrs.get("albumArtistName"):
+        tags.album_artist = attrs["albumArtistName"]
+    if not (getattr(tags, "genre", None) or "").strip():
+        cat_genre = _pick_catalog_genre(attrs.get("genreNames"))
+        if cat_genre:
+            tags.genre = cat_genre
 
 
 # 使用账户区Apple Music目录元数据兜底对齐标签
@@ -898,6 +973,18 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
     We gracefully fallback to enhancedHls to avoid false negatives.
     """
 
+    # 初始化带目标元数据地区属性的歌曲接口
+    def __init__(
+        self,
+        *args,
+        metadata_storefront: Optional[str] = None,
+        metadata_language: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self._metadata_storefront = metadata_storefront
+        self._metadata_language = metadata_language
+
     # 解析HLS音频资产元数据与变体流映射关系
     @staticmethod
     def _resolve_asset_metadata(
@@ -1072,28 +1159,85 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
 
         return None
 
-    # 按账户地区目录元数据兜底对齐歌曲标签
+    # 按目标元数据地区对齐歌曲标签并兜底填充缺失字段
     async def get_media(self, media: Any):
         async for item in super().get_media(media):
             if not item.partial and item.tags is not None and item.media_metadata:
-                _align_tags_with_catalog(
-                    item.tags,
-                    item.media_metadata,
-                    getattr(self.base.apple_music_api, "storefront", ""),
-                )
+                account_sf = (getattr(self.base.apple_music_api, "storefront", "") or "").lower()
+                target_sf = (self._metadata_storefront or account_sf).lower()
+                target_lang = self._metadata_language or getattr(self.base.apple_music_api, "language", "en-US")
+                if target_sf and target_sf != account_sf:
+                    catalog_id = self.base.parse_catalog_media_id(item.media_metadata)
+                    target_meta = await _fetch_catalog_metadata_for_storefront(
+                        self.base.apple_music_api,
+                        "songs",
+                        catalog_id,
+                        target_sf,
+                        target_lang,
+                    )
+                    if target_meta:
+                        _align_tags_with_catalog(item.tags, target_meta, target_sf)
+                    else:
+                        _fill_missing_tags_from_catalog(item.tags, item.media_metadata)
+                else:
+                    _align_tags_with_catalog(item.tags, item.media_metadata, target_sf)
             yield item
 
 
 class LingoAppleMusicMusicVideoInterface(AppleMusicMusicVideoInterface):
-    # 按账户地区目录元数据兜底对齐MV标签
+    # 初始化带目标元数据地区属性与iTunes接口的MV接口
+    def __init__(
+        self,
+        *args,
+        metadata_storefront: Optional[str] = None,
+        metadata_language: Optional[str] = None,
+        metadata_itunes_api: Optional[ItunesApi] = None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self._metadata_storefront = metadata_storefront
+        self._metadata_language = metadata_language
+        self._metadata_itunes_api = metadata_itunes_api
+
+    # 优先使用目标地区iTunes接口获取MV标签并在失败时回退账号区
+    async def get_tags(self, metadata: dict, itunes_page_metadata: dict):
+        if self._metadata_itunes_api is not None:
+            orig_itunes_api = self.base.itunes_api
+            try:
+                self.base.itunes_api = self._metadata_itunes_api
+                return await super().get_tags(metadata, itunes_page_metadata)
+            except Exception as e:
+                logger.warning(
+                    "Target region MV lookup failed (%s), falling back to account region: %s",
+                    self._metadata_storefront,
+                    e,
+                )
+            finally:
+                self.base.itunes_api = orig_itunes_api
+        return await super().get_tags(metadata, itunes_page_metadata)
+
+    # 按目标元数据地区对齐MV标签并兜底填充缺失字段
     async def get_media(self, media: Any):
         async for item in super().get_media(media):
             if not item.partial and item.tags is not None and item.media_metadata:
-                _align_tags_with_catalog(
-                    item.tags,
-                    item.media_metadata,
-                    getattr(self.base.apple_music_api, "storefront", ""),
-                )
+                account_sf = (getattr(self.base.apple_music_api, "storefront", "") or "").lower()
+                target_sf = (self._metadata_storefront or account_sf).lower()
+                target_lang = self._metadata_language or getattr(self.base.apple_music_api, "language", "en-US")
+                if target_sf and target_sf != account_sf:
+                    catalog_id = self.base.parse_catalog_media_id(item.media_metadata)
+                    target_meta = await _fetch_catalog_metadata_for_storefront(
+                        self.base.apple_music_api,
+                        "music-videos",
+                        catalog_id,
+                        target_sf,
+                        target_lang,
+                    )
+                    if target_meta:
+                        _align_tags_with_catalog(item.tags, target_meta, target_sf)
+                    else:
+                        _fill_missing_tags_from_catalog(item.tags, item.media_metadata)
+                else:
+                    _align_tags_with_catalog(item.tags, item.media_metadata, target_sf)
             yield item
 
 
@@ -1268,18 +1412,63 @@ class DownloadManager:
             logger.error(f"Failed to initialize Gamdl downloader: {e}")
             return False
 
-    # 根据格式与设备环境构建下载器实例
-    async def _create_downloader(self, codec: str, video_resolution: str, use_wrapper: bool):
+    # 根据格式、设备环境与元数据地区配置构建下载器实例
+    async def _create_downloader(
+        self,
+        codec: str,
+        video_resolution: str,
+        use_wrapper: bool,
+        metadata_region: Optional[str] = None,
+    ):
+        all_settings = get_all_settings()
+        requested_region = (
+            metadata_region
+            if metadata_region is not None
+            else all_settings.get(SETTINGS_KEY_METADATA_REGION, "auto")
+        )
+        account_sf = (getattr(self.apple_music_api, "storefront", "") or "cn").lower()
+        target_sf, target_lang = await _resolve_target_metadata_region_and_language(
+            account_sf,
+            requested_region,
+            token=getattr(self.apple_music_api, "token", None),
+            media_user_token=getattr(self.apple_music_api, "media_user_token", None),
+        )
+
+        # 克隆共享API实例以在不干扰账号播放区域的前提下切换元数据语言
+        localized_api = copy.copy(self.apple_music_api)
+        localized_api.language = target_lang
+
+        cleanup_clients: List[Any] = []
+        account_itunes_api = await ItunesApi.create(
+            storefront=account_sf,
+            language=target_lang,
+            **({"storefront_id": None} if account_sf != "us" else {}),
+        )
+        cleanup_clients.append(account_itunes_api.client)
+
+        metadata_itunes_api: Optional[ItunesApi] = None
+        if target_sf != account_sf:
+            try:
+                metadata_itunes_api = await ItunesApi.create(
+                    storefront=target_sf,
+                    language=target_lang,
+                    **({"storefront_id": None} if target_sf != "us" else {}),
+                )
+                cleanup_clients.append(metadata_itunes_api.client)
+            except Exception as e:
+                logger.warning("Failed to create target iTunes API (%s): %s", target_sf, e)
+
         base_interface = await AppleMusicBaseInterface.create(
-            apple_music_api=self.apple_music_api,
+            apple_music_api=localized_api,
+            itunes_api=account_itunes_api,
             use_wrapper=use_wrapper
         )
-        
+
         try:
             song_codec_enum = _resolve_song_codec_enum(codec)
         except ValueError:
             song_codec_enum = _resolve_song_codec_enum("aac-legacy")
-            
+
         try:
             video_res_enum = MusicVideoResolution(video_resolution)
         except ValueError:
@@ -1287,22 +1476,27 @@ class DownloadManager:
 
         song_interface = LingoAppleMusicSongInterface(
             base=base_interface,
-            codec_priority=[song_codec_enum]
+            codec_priority=[song_codec_enum],
+            metadata_storefront=target_sf,
+            metadata_language=target_lang,
         )
         music_video_interface = LingoAppleMusicMusicVideoInterface(
             base=base_interface,
-            resolution=video_res_enum
+            resolution=video_res_enum,
+            metadata_storefront=target_sf,
+            metadata_language=target_lang,
+            metadata_itunes_api=metadata_itunes_api,
         )
         uploaded_video_interface = AppleMusicUploadedVideoInterface(
             base=base_interface,
         )
-        
+
         interface = AppleMusicInterface(
             song=song_interface,
             music_video=music_video_interface,
             uploaded_video=uploaded_video_interface,
         )
-        
+
         nm3u8_binary = shutil.which("N_m3u8DL-RE") or shutil.which("N_m3u8DL-RE.exe")
         download_mode = DownloadMode.NM3U8DLRE if nm3u8_binary else DownloadMode.YTDLP
 
@@ -1314,31 +1508,45 @@ class DownloadManager:
             ffmpeg_path=settings.FFMPEG_PATH,
             download_mode=download_mode,
         )
-        
+
         song_downloader = AppleMusicSongDownloader(base=base_downloader)
         music_video_downloader = AppleMusicMusicVideoDownloader(base=base_downloader)
         uploaded_video_downloader = AppleMusicUploadedVideoDownloader(base=base_downloader)
-        
-        return AppleMusicDownloader(
+
+        downloader = AppleMusicDownloader(
             song=song_downloader,
             music_video=music_video_downloader,
             uploaded_video=uploaded_video_downloader,
         )
+        downloader._lingo_cleanup_clients = cleanup_clients
+        return downloader
 
     # 将指定URL加入后台异步下载任务队列
-    async def add_to_queue(self, url: str, codec: str = "aac-legacy", video_resolution: str = "1080p", use_wrapper: bool = False) -> bool:
+    async def add_to_queue(
+        self,
+        url: str,
+        codec: str = "aac-legacy",
+        video_resolution: str = "1080p",
+        use_wrapper: bool = False,
+        metadata_region: Optional[str] = None,
+    ) -> bool:
         if not self.is_initialized:
             logger.error("Downloader not initialized. Please check cookies.txt")
             return False
-            
+
         self.download_status[url] = {
-            "status": "pending", 
-            "items": [], 
+            "status": "pending",
+            "items": [],
             "codec": _normalize_codec_label(codec),
             "resolution": video_resolution
         }
-        
-        downloader = await self._create_downloader(codec, video_resolution, use_wrapper)
+
+        downloader = await self._create_downloader(
+            codec,
+            video_resolution,
+            use_wrapper,
+            metadata_region=metadata_region,
+        )
         task = asyncio.create_task(self._process_url(downloader, url))
         # Keep a strong reference so GC cannot destroy the task before it finishes.
         self._tasks.add(task)
@@ -1497,6 +1705,12 @@ class DownloadManager:
             logger.error(f"Error processing url {url}: {e}", exc_info=True)
             self.download_status[url]["status"] = "error"
             self.download_status[url]["error"] = str(e)
+        finally:
+            for client in getattr(downloader, "_lingo_cleanup_clients", []) or []:
+                try:
+                    await client.aclose()
+                except Exception:
+                    pass
 
     # 更新单曲下载状态并标记完成
     def _mark_item_completed(self, url: str, index: int, metadata: Dict[str, Any]) -> None:

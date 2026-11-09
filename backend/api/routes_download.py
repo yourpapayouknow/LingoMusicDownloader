@@ -25,6 +25,7 @@ class DownloadRequest(BaseModel):
     codec: str = "aac-legacy"
     video_resolution: str = "1080p"
     use_wrapper: bool = False
+    metadata_region: Optional[str] = None
 
 
 class OpenFolderRequest(BaseModel):
@@ -343,10 +344,11 @@ async def strtdwnld(request: DownloadRequest):
             )
 
     added = await manager.add_to_queue(
-        request.url, 
-        codec=request.codec, 
+        request.url,
+        codec=request.codec,
         video_resolution=request.video_resolution,
-        use_wrapper=request.use_wrapper
+        use_wrapper=request.use_wrapper,
+        metadata_region=request.metadata_region,
     )
     if not added:
         raise HTTPException(status_code=500, detail="Failed to add to download queue")
