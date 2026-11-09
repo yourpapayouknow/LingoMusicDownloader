@@ -59,7 +59,7 @@ WRAPPER_SESSION_DB_RELATIVE_PATH = Path(
 )
 
 # 共享状态与全局锁
-_wsl2_install_state_lock = threading.Lock()
+_wsl2_install_state_lock = threading.RLock()
 _wsl2_install_state: Dict[str, Any] = {
     "status": "idle",
     "stage": "idle",
@@ -75,7 +75,7 @@ _wsl2_install_state: Dict[str, Any] = {
     "updated_at": 0.0,
 }
 
-_wrapper_setup_state_lock = threading.Lock()
+_wrapper_setup_state_lock = threading.RLock()
 _wrapper_setup_state: Dict[str, Any] = {
     "status": "idle",
     "stage": "idle",
@@ -93,7 +93,7 @@ _wrapper_setup_state: Dict[str, Any] = {
     "updated_at": 0.0,
 }
 
-_wrapper_process_lock = threading.Lock()
+_wrapper_process_lock = threading.RLock()
 _wrapper_process: Optional[subprocess.Popen] = None
 _wrapper_reader_thread: Optional[threading.Thread] = None
 _wrapper_last_output: str = ""

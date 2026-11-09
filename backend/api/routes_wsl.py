@@ -1,7 +1,7 @@
 # WSL2环境预检、自动化安装与运行状态管理模块
 from backend.head import (
     APIRouter, HTTPException, BaseModel, Optional, List, Dict, Any,
-    os, time, json, subprocess, tempfile, threading, Path, re, logging
+    asyncio, os, time, json, subprocess, tempfile, threading, Path, re, logging
 )
 from backend.api.common import (
     WSL2_REQUIRED_FREE_GB, WSL2_D_INSTALL_PATH, WSL2_UBUNTU_DISTRO,
@@ -593,7 +593,7 @@ async def wslprchkrtr():
             "c_free_gb": 0.0,
             "is_admin": False,
         }
-    return bldwslprchk(WSL2_REQUIRED_FREE_GB)
+    return await asyncio.to_thread(bldwslprchk, WSL2_REQUIRED_FREE_GB)
 
 
 # 触发WSL2安装流程端点
@@ -603,7 +603,7 @@ async def strtwslrtr(request: Wsl2InstallStartRequest):
         raise HTTPException(status_code=400, detail="Current OS does not support WSL2 installation.")
 
     required_gb = request.required_gb if request.required_gb is not None else WSL2_REQUIRED_FREE_GB
-    precheck = bldwslprchk(required_gb)
+    precheck = await asyncio.to_thread(bldwslprchk, required_gb)
     if precheck.get("already_installed"):
         with _wsl2_install_state_lock:
             wslstset(

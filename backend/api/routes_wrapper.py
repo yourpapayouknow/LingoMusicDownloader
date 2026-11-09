@@ -1,7 +1,7 @@
 # Wrapper服务部署、解压、进程生命周期与交互认证管理模块
 from backend.head import (
     APIRouter, HTTPException, BaseModel, Optional, List, Dict, Any,
-    os, time, subprocess, threading, Path, re, shlex, shutil, urllib, zipfile, logging
+    asyncio, os, time, subprocess, threading, Path, re, shlex, shutil, urllib, zipfile, logging
 )
 from backend.core.config import settings
 from backend.api.common import (
@@ -538,27 +538,24 @@ def strtwrprwrkr(
     use_cached_credentials: bool = False,
     force_restart: bool = False,
     reset_logs: bool = False,
+    stage: str = "queued",
+    message: str = "任务已启动。",
+    allow_if_running: bool = False,
 ) -> bool:
     with _wrapper_setup_state_lock:
         st = wrprstcpy()
-        if st.get("running"):
+        if st.get("running") and not allow_if_running:
             return False
-        if reset_logs:
-            _wrapper_setup_state_lock.acquire()
-            try:
-                pass
-            finally:
-                _wrapper_setup_state_lock.release()
         wrprstset(
             status="running",
-            stage="queued",
+            stage=stage,
             running=True,
             completed=False,
             success_flag=False,
             awaiting_input=False,
             input_type="",
             input_prompt="",
-            message="任务已启动。",
+            message=message,
             logs=[] if reset_logs else st.get("logs", []),
         )
 
@@ -595,13 +592,13 @@ def sndwrprint(lines: List[str]) -> tuple[bool, str]:
 # Wrapper部署环境预检端点
 @router.get("/wrapper/setup/precheck")
 async def wrprprchkrtr():
-    return bldwrprprchk()
+    return await asyncio.to_thread(bldwrprprchk)
 
 
 # 启动Wrapper部署与初始化流程端点
 @router.post("/wrapper/setup/start")
 async def strtwrprrtr(request: WrapperSetupStartRequest):
-    precheck = bldwrprprchk()
+    precheck = await asyncio.to_thread(bldwrprprchk)
 
     if not precheck.get("can_start"):
         wrprstset(
@@ -624,6 +621,28 @@ async def strtwrprrtr(request: WrapperSetupStartRequest):
             "message": precheck.get("message") or "请先安装WSL2。",
         }
 
+    force_restart = bool(request.force_restart)
+    if not force_restart and precheck.get("wrapper_running"):
+        wrprstset(
+            status="success",
+            stage="completed",
+            running=False,
+            completed=True,
+            success_flag=True,
+            awaiting_input=False,
+            input_type="",
+            input_prompt="",
+            wsl2_installed=True,
+            wrapper_installed=True,
+            wrapper_running=True,
+            message="Wrapper正在运行。",
+        )
+        return {
+            "success": True,
+            "status": "success",
+            "message": "Wrapper正在运行。",
+        }
+
     current_state = wrprstcpy()
     if current_state.get("running"):
         return {
@@ -633,7 +652,6 @@ async def strtwrprrtr(request: WrapperSetupStartRequest):
         }
 
     global _wrapper_cached_credentials
-    force_restart = bool(request.force_restart) or bool(precheck.get("wrapper_running"))
     if force_restart:
         _wrapper_cached_credentials = None
         setwrprprc(None)
@@ -662,7 +680,9 @@ async def strtwrprrtr(request: WrapperSetupStartRequest):
 @router.get("/wrapper/setup/status")
 async def gtwrprsttsrtr():
     state = wrprstcpy()
-    if iswrprrun() and state.get("status") != "success":
+    wrapper_running = await asyncio.to_thread(iswrprrun)
+    wrapper_installed = await asyncio.to_thread(iswrprinst)
+    if wrapper_running and state.get("status") != "success":
         wrprstset(
             status="success",
             stage="completed",
@@ -679,8 +699,8 @@ async def gtwrprsttsrtr():
         )
         state = wrprstcpy()
     state["wsl2_installed"] = bool(state.get("wsl2_installed"))
-    state["wrapper_installed"] = iswrprinst()
-    state["wrapper_running"] = iswrprrun()
+    state["wrapper_installed"] = wrapper_installed
+    state["wrapper_running"] = wrapper_running
     return {"success": True, **state}
 
 
@@ -715,43 +735,27 @@ async def sbmtwrprintrtr(request: WrapperSetupInputRequest):
         global _wrapper_cached_credentials
         _wrapper_cached_credentials = (apple_id, password)
 
-        sent, err = sndwrprint([apple_id, password])
+        sent, err = await asyncio.to_thread(sndwrprint, [apple_id, password])
         if sent:
             wrprstlog("已提交Apple ID与密码，等待2FA或服务启动。")
-            wrprstset(
-                status="running",
-                stage="auth-credentials",
-                running=True,
-                completed=False,
-                success_flag=False,
-                awaiting_input=False,
-                input_type="",
-                input_prompt="",
-                message="账号密码已提交，正在继续登录流程...",
-            )
             strtwrprwrkr(
                 launch_new=False,
                 use_cached_credentials=True,
                 reset_logs=False,
+                stage="auth-credentials",
+                message="账号密码已提交，正在继续登录流程...",
+                allow_if_running=True,
             )
             return {"success": True, "status": "running", "message": "账号密码已提交。"}
 
         wrprstlog(f"当前进程不接受输入，将重启Wrapper继续登录。原因: {err}")
-        wrprstset(
-            status="running",
-            stage="restart-wrapper",
-            running=True,
-            completed=False,
-            success_flag=False,
-            awaiting_input=False,
-            input_type="",
-            input_prompt="",
-            message="正在重启Wrapper并继续登录...",
-        )
         strtwrprwrkr(
             launch_new=True,
             use_cached_credentials=True,
             reset_logs=False,
+            stage="restart-wrapper",
+            message="正在重启Wrapper并继续登录...",
+            allow_if_running=True,
         )
         return {"success": True, "status": "running", "message": "正在重启Wrapper并继续登录。"}
 
@@ -760,26 +764,18 @@ async def sbmtwrprintrtr(request: WrapperSetupInputRequest):
         if not code:
             return {"success": False, "status": "error", "message": "请输入2FA验证码。"}
 
-        sent, err = sndwrprint([code])
+        sent, err = await asyncio.to_thread(sndwrprint, [code])
         if not sent:
             return {"success": False, "status": "error", "message": err or "提交2FA验证码失败。"}
 
         wrprstlog("已提交2FA验证码，等待Wrapper完成启动。")
-        wrprstset(
-            status="running",
-            stage="auth-2fa",
-            running=True,
-            completed=False,
-            success_flag=False,
-            awaiting_input=False,
-            input_type="",
-            input_prompt="",
-            message="2FA验证码已提交，正在等待服务就绪...",
-        )
         strtwrprwrkr(
             launch_new=False,
             use_cached_credentials=True,
             reset_logs=False,
+            stage="auth-2fa",
+            message="2FA验证码已提交，正在等待服务就绪...",
+            allow_if_running=True,
         )
         return {"success": True, "status": "running", "message": "2FA验证码已提交。"}
 
