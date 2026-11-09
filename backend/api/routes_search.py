@@ -65,7 +65,8 @@ def nrmlsrchrst(raw_payload: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 
 # 生成搜索缓存键标识
 def srchckey(term: str, limit: int) -> str:
-    return f"{term.strip().lower()}::{limit}"
+    sf = getattr(manager.apple_music_api, "storefront", "") or "cn"
+    return f"{sf.lower()}::{term.strip().lower()}::{limit}"
 
 
 # 清理超期与过载的搜索缓存条目
@@ -197,7 +198,7 @@ def itnsmvitm(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # 通过iTunes公开接口进行回退检索
 async def srchitnsfb(term: str, limit: int) -> Dict[str, Any]:
     storefront = "cn"
-    language = "zh_cn"
+    language = "zh-CN"
     if manager.apple_music_api:
         storefront = manager.apple_music_api.storefront or storefront
         language = manager.apple_music_api.language or language
@@ -268,6 +269,8 @@ async def srchdrct(term: str, limit: int) -> Dict[str, Any]:
         "limit": limit,
         "offset": 0,
     }
+    if getattr(api, "language", None):
+        params["l"] = api.language
     headers = dict(api.client.headers)
 
     if _search_http_client is None or _search_http_client.is_closed:

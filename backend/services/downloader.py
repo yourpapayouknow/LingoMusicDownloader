@@ -57,7 +57,203 @@ LEGACY_WRAPPER_ACCOUNT_URLS = (
 APPLE_STOREFRONT_ID_MAP = {
     "143465": "cn",
     "143441": "us",
+    "143470": "tw",
+    "143463": "hk",
+    "143462": "jp",
+    "143466": "kr",
+    "143444": "gb",
+    "143460": "au",
+    "143455": "ca",
+    "143464": "sg",
+    "143443": "de",
+    "143442": "fr",
+    "143454": "es",
+    "143468": "mx",
+    "143450": "it",
+    "143452": "nl",
+    "143469": "ru",
+    "143503": "br",
+    "143453": "pt",
+    "143467": "in",
+    "143476": "id",
+    "143475": "th",
+    "143471": "vn",
+    "143473": "my",
+    "143480": "tr",
+    "143479": "sa",
+    "143481": "ae",
 }
+APPLE_STOREFRONT_LANGUAGE_MAP = {
+    "cn": "zh-CN",
+    "tw": "zh-TW",
+    "hk": "zh-HK",
+    "mo": "zh-HK",
+    "jp": "ja-JP",
+    "kr": "ko-KR",
+    "us": "en-US",
+    "gb": "en-GB",
+    "uk": "en-GB",
+    "au": "en-AU",
+    "ca": "en-CA",
+    "sg": "en-GB",
+    "in": "en-GB",
+    "ph": "en-US",
+    "de": "de-DE",
+    "fr": "fr-FR",
+    "es": "es-ES",
+    "mx": "es-MX",
+    "it": "it-IT",
+    "nl": "nl-NL",
+    "ru": "ru-RU",
+    "br": "pt-BR",
+    "pt": "pt-PT",
+    "id": "id-ID",
+    "th": "th-TH",
+    "vn": "vi-VN",
+    "my": "ms-MY",
+    "tr": "tr-TR",
+    "sa": "ar-SA",
+    "ae": "ar-AE",
+}
+CJK_PREFERRED_STOREFRONTS = {"cn", "tw", "hk", "mo", "jp", "kr"}
+GENERIC_GENRE_NAMES = {"music", "音乐", "音樂", "ミュージック", "음악"}
+
+
+# 将BCP-47语言标签规整为Apple Music与iTunes兼容格式
+def _normalize_itunes_language_tag(tag: Optional[str]) -> str:
+    raw = (tag or "").strip().replace("_", "-")
+    if not raw:
+        return "en-US"
+    lower = raw.lower()
+    if lower.startswith("zh-hans") or lower in {"zh", "zh-cn"}:
+        return "zh-CN"
+    if lower.startswith("zh-hant-hk") or lower == "zh-hk":
+        return "zh-HK"
+    if lower.startswith("zh-hant") or lower == "zh-tw":
+        return "zh-TW"
+    if lower == "ja":
+        return "ja-JP"
+    if lower == "ko":
+        return "ko-KR"
+    if lower in {"en-in", "en-sg"}:
+        return "en-GB"
+    return raw
+
+
+# 按Storefront代号同步解析默认元数据语言
+def _resolve_storefront_language_sync(storefront: Optional[str]) -> str:
+    sf = (storefront or "").strip().lower()
+    return APPLE_STOREFRONT_LANGUAGE_MAP.get(sf, "en-US")
+
+
+# 异步探测并确定账户Storefront对应的元数据语言
+async def _resolve_storefront_language(
+    storefront: Optional[str],
+    token: Optional[str] = None,
+    media_user_token: Optional[str] = None,
+) -> str:
+    sf = (storefront or "").strip().lower()
+    if not sf:
+        return "en-US"
+    if sf in APPLE_STOREFRONT_LANGUAGE_MAP:
+        return APPLE_STOREFRONT_LANGUAGE_MAP[sf]
+
+    if token:
+        headers = {
+            "authorization": f"Bearer {token}",
+            "origin": APPLE_MUSIC_HOMEPAGE_URL,
+        }
+        if media_user_token:
+            headers["cookie"] = f"media-user-token={media_user_token}"
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                resp = await client.get(
+                    f"{APPLE_MUSIC_AMP_API_URL}/v1/storefronts/{sf}",
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    data = resp.json().get("data", [])
+                    if data and isinstance(data[0], dict):
+                        default_lang = data[0].get("attributes", {}).get("defaultLanguageTag")
+                        if default_lang:
+                            return _normalize_itunes_language_tag(default_lang)
+        except Exception as e:
+            logger.debug("Storefront language lookup failed for %s: %s", sf, e)
+
+    return _resolve_storefront_language_sync(sf)
+
+
+# 从目录属性提取首选非泛化流派名称
+def _pick_catalog_genre(genre_names: Any) -> Optional[str]:
+    if not isinstance(genre_names, list):
+        return None
+    cleaned = [str(g).strip() for g in genre_names if isinstance(g, str) and g.strip()]
+    for g in cleaned:
+        if g.lower() not in GENERIC_GENRE_NAMES:
+            return g
+    return cleaned[0] if cleaned else None
+
+
+# 判断流媒体标签是否应替换为账户区目录本地化文本
+def _should_use_catalog_text(
+    tag_value: Optional[str],
+    catalog_value: Optional[str],
+    storefront: Optional[str],
+) -> bool:
+    cat_text = (catalog_value or "").strip()
+    if not cat_text:
+        return False
+    cur_text = (tag_value or "").strip()
+    if not cur_text:
+        return True
+    if cur_text == cat_text:
+        return False
+    sf = (storefront or "").strip().lower()
+    if sf in CJK_PREFERRED_STOREFRONTS:
+        if cur_text.isascii() and not cat_text.isascii():
+            return True
+        if sf == "cn" and not cat_text.isascii():
+            return True
+    return False
+
+
+# 使用账户区Apple Music目录元数据兜底对齐标签
+def _align_tags_with_catalog(
+    tags: Any,
+    media_metadata: Optional[Dict[str, Any]],
+    storefront: Optional[str],
+) -> None:
+    if tags is None or not isinstance(media_metadata, dict):
+        return
+    attrs = media_metadata.get("attributes")
+    if not isinstance(attrs, dict):
+        return
+
+    cat_title = attrs.get("name")
+    if _should_use_catalog_text(getattr(tags, "title", None), cat_title, storefront):
+        tags.title = cat_title
+        if hasattr(tags, "title_sort"):
+            tags.title_sort = cat_title
+
+    cat_artist = attrs.get("artistName")
+    if _should_use_catalog_text(getattr(tags, "artist", None), cat_artist, storefront):
+        tags.artist = cat_artist
+        if hasattr(tags, "artist_sort"):
+            tags.artist_sort = cat_artist
+
+    cat_album = attrs.get("albumName")
+    if _should_use_catalog_text(getattr(tags, "album", None), cat_album, storefront):
+        tags.album = cat_album
+        if hasattr(tags, "album_sort"):
+            tags.album_sort = cat_album
+
+    cat_album_artist = attrs.get("albumArtistName")
+    if _should_use_catalog_text(getattr(tags, "album_artist", None), cat_album_artist, storefront):
+        tags.album_artist = cat_album_artist
+
+    cat_genre = _pick_catalog_genre(attrs.get("genreNames"))
+    if _should_use_catalog_text(getattr(tags, "genre", None), cat_genre, storefront):
+        tags.genre = cat_genre
 
 
 # 从Cookies中提取media-user-token
@@ -184,13 +380,18 @@ async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:
 async def _get_music_video_metadata_from_itunes(
     music_video_id: str,
     storefront: str,
+    language: Optional[str] = None,
 ) -> Dict[str, Any]:
+    lang_tag = _normalize_itunes_language_tag(
+        language or _resolve_storefront_language_sync(storefront)
+    )
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
         response = await client.get(
             ITUNES_LOOKUP_API_URL,
             params={
                 "id": music_video_id,
                 "country": storefront,
+                "lang": lang_tag,
                 "entity": "musicVideo",
             },
         )
@@ -261,6 +462,7 @@ def _install_legacy_music_video_metadata_fallback(api: AppleMusicApi) -> None:
             return await _get_music_video_metadata_from_itunes(
                 music_video_id,
                 api.storefront,
+                getattr(api, "language", None),
             )
 
     api.get_music_video = get_music_video_with_itunes_fallback
@@ -325,8 +527,14 @@ async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
         or auth_info.get("storefront")
         or _storefront_from_legacy_wrapper(wrapper_account_info.get("storefront_id"))
     )
+    language = await _resolve_storefront_language(
+        storefront,
+        token=dev_token,
+        media_user_token=media_user_token,
+    )
     api = await AppleMusicApi.create(
         storefront=storefront,
+        language=language,
         token=dev_token,
     )
     api.media_user_token = media_user_token
@@ -864,6 +1072,30 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
 
         return None
 
+    # 按账户地区目录元数据兜底对齐歌曲标签
+    async def get_media(self, media: Any):
+        async for item in super().get_media(media):
+            if not item.partial and item.tags is not None and item.media_metadata:
+                _align_tags_with_catalog(
+                    item.tags,
+                    item.media_metadata,
+                    getattr(self.base.apple_music_api, "storefront", ""),
+                )
+            yield item
+
+
+class LingoAppleMusicMusicVideoInterface(AppleMusicMusicVideoInterface):
+    # 按账户地区目录元数据兜底对齐MV标签
+    async def get_media(self, media: Any):
+        async for item in super().get_media(media):
+            if not item.partial and item.tags is not None and item.media_metadata:
+                _align_tags_with_catalog(
+                    item.tags,
+                    item.media_metadata,
+                    getattr(self.base.apple_music_api, "storefront", ""),
+                )
+            yield item
+
 
 # 安全读取对象属性
 def _safe_attr(obj: Any, attr_name: str, default: Any = None) -> Any:
@@ -1000,6 +1232,12 @@ class DownloadManager:
                         self.apple_music_api = None
                         continue
 
+                    # 依据账户所属Storefront自动设定对应的本地化元数据语言
+                    self.apple_music_api.language = await _resolve_storefront_language(
+                        self.apple_music_api.storefront,
+                        token=self.apple_music_api.token,
+                        media_user_token=self.apple_music_api.media_user_token,
+                    )
                     self.is_initialized = True
                     return True
                 except Exception as token_error:
@@ -1051,7 +1289,7 @@ class DownloadManager:
             base=base_interface,
             codec_priority=[song_codec_enum]
         )
-        music_video_interface = AppleMusicMusicVideoInterface(
+        music_video_interface = LingoAppleMusicMusicVideoInterface(
             base=base_interface,
             resolution=video_res_enum
         )
