@@ -42,45 +42,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-# routes_download.py | audio metadata
-from mutagen import File as MutagenFile
-from mutagen.mp4 import MP4Cover
-
-# routes_cookies.py | webview decrypt
-from Crypto.Cipher import AES
+# routes_download.py | 音频元数据：mutagen已改为使用点函数级惰性导入
+# routes_cookies.py | webview解密：Crypto已改为使用点函数级惰性导入
 
 # downloader.py | stream & media processing
-import m3u8
-from yt_dlp import YoutubeDL
 from httpx_retries import Retry, RetryTransport
+
+# gamdl.api仅含httpx/structlog轻依赖，token初始化必需，保留急切导入；
+# gamdl.downloader/interface重型链（PIL/pywidevine/pymp4/protobuf）
+# 已收口至backend/services/gamdlrt.py，由downloader.gamdlrt()首次下载时惰性导入
 from gamdl.api.constants import APPLE_MUSIC_SEARCH_API_URI, APPLE_MUSIC_AMP_API_URL
 from gamdl.api.exceptions import GamdlApiResponseError
-from gamdl.interface.exceptions import (
-    GamdlInterfaceDecryptionNotAvailableError,
-    GamdlInterfaceFormatNotAvailableError,
-)
 from gamdl.api import AppleMusicApi, ItunesApi
-from gamdl.downloader import (
-    AppleMusicBaseDownloader,
-    AppleMusicDownloader,
-    AppleMusicMusicVideoDownloader,
-    AppleMusicSongDownloader,
-    AppleMusicUploadedVideoDownloader,
-)
-from gamdl.downloader.enums import DownloadMode
-from gamdl.downloader.exceptions import GamdlDownloaderMediaFileExistsError
-from gamdl.interface import (
-    AppleMusicBaseInterface,
-    AppleMusicInterface,
-    AppleMusicMusicVideoInterface,
-    AppleMusicSongInterface,
-    AppleMusicUploadedVideoInterface,
-    SongCodec,
-    MusicVideoResolution,
-)
-from gamdl.interface.constants import MP4_FORMAT_CODECS
-from gamdl.interface.types import StreamInfo, StreamInfoAv
-from gamdl.interface.enums import MediaFileFormat
 
 __all__ = [
     "sys",

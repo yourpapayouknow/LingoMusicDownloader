@@ -97,7 +97,6 @@ _wrapper_process_lock = threading.RLock()
 _wrapper_process: Optional[subprocess.Popen] = None
 _wrapper_reader_thread: Optional[threading.Thread] = None
 _wrapper_last_output: str = ""
-_wrapper_cached_credentials: Optional[Tuple[str, str]] = None
 
 
 # 转义PowerShell单引号字符串

@@ -2,7 +2,7 @@
 from backend.head import (
     APIRouter, HTTPException, FileResponse, Response, BaseModel,
     Optional, List, Dict, Any, os, time, subprocess, shutil, Path,
-    re, hashlib, unicodedata, logging, asyncio, MutagenFile, MP4Cover
+    re, hashlib, unicodedata, logging, asyncio
 )
 from backend.services.downloader import manager
 from backend.core.config import settings
@@ -67,6 +67,7 @@ def rdtag(tags: Any, keys: List[str]) -> str:
 
 # 检测本地音频文件的编码格式
 def dtctlclcdc(file_path: str) -> str:
+    from mutagen import File as MutagenFile
     try:
         audio = MutagenFile(file_path)
         info = getattr(audio, "info", None)
@@ -81,6 +82,8 @@ def dtctlclcdc(file_path: str) -> str:
 
 # 提取音频文件中内嵌的封面图像
 def extrcovr(file_path: str) -> Optional[tuple[bytes, str]]:
+    from mutagen import File as MutagenFile
+    from mutagen.mp4 import MP4Cover
     audio = MutagenFile(file_path)
     tags = getattr(audio, "tags", None)
     if not tags:
@@ -125,6 +128,7 @@ def sftrkidfn(track_id: str) -> str:
 
 # 选择高质量PCM采样深度
 def slctpcmcdc(source_path: str) -> str:
+    from mutagen import File as MutagenFile
     try:
         audio = MutagenFile(source_path)
         info = getattr(audio, "info", None)
@@ -206,6 +210,7 @@ def extrlclhst(file_path: str) -> Dict[str, Any]:
     has_embedded_cover = False
 
     try:
+        from mutagen import File as MutagenFile
         audio = MutagenFile(file_path)
         tags = getattr(audio, "tags", None)
         if tags:
