@@ -58,6 +58,19 @@ def intdb() -> None:
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS download_tasks (
+            url TEXT PRIMARY KEY,
+            status VARCHAR(32) NOT NULL,
+            codec VARCHAR(32),
+            resolution VARCHAR(16),
+            items_json TEXT,
+            error TEXT,
+            file_path TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -173,6 +186,61 @@ def updhstrylrc(track_id: str, lyrics_path: str) -> None:
     conn.close()
 
 
+# 插入或更新单条下载任务快照
+def insdwnldtsk(data: Dict[str, Any]) -> None:
+    conn = gtconn()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO download_tasks
+            (url, status, codec, resolution, items_json, error, file_path, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(url) DO UPDATE SET
+                status=excluded.status,
+                codec=excluded.codec,
+                resolution=excluded.resolution,
+                items_json=excluded.items_json,
+                error=excluded.error,
+                file_path=excluded.file_path,
+                updated_at=CURRENT_TIMESTAMP
+        """,
+            (
+                data.get("url", ""),
+                data.get("status", ""),
+                data.get("codec", ""),
+                data.get("resolution", ""),
+                data.get("items_json", "[]"),
+                data.get("error", ""),
+                data.get("file_path", ""),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# 查询下载任务快照列表
+def gtdwnldtsks(limit: int = 100) -> List[Dict[str, Any]]:
+    conn = gtconn()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM download_tasks ORDER BY updated_at DESC LIMIT ?",
+        (limit,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+        entry = dict(row)
+        try:
+            entry["items"] = json.loads(entry.pop("items_json") or "[]")
+        except Exception:
+            entry["items"] = []
+        result.append(entry)
+    return result
+
+
 # 记录关键词搜索偏好频率
 def rprtsrch(keyword: str) -> None:
     if not keyword or not keyword.strip():
@@ -223,6 +291,8 @@ get_history_by_track_id = gthstrybytrk
 update_history_lyrics_path = updhstrylrc
 report_search = rprtsrch
 get_recommendations = gtrecmdtn
+insert_download_task = insdwnldtsk
+get_download_tasks = gtdwnldtsks
 
 # 初始化数据库
 intdb()

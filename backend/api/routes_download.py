@@ -319,13 +319,11 @@ def scnlcllb(root_path: str) -> Dict[str, Any]:
 # 提交单曲或专辑下载任务端点
 @router.post("/download")
 async def strtdwnld(request: DownloadRequest):
-    if not manager.is_initialized:
-        success = await manager.initialize()
-        if not success:
-            raise HTTPException(
-                status_code=500, 
-                detail="Downloader not initialized. Please ensure cookies.txt is provided and valid."
-            )
+    if not await manager.ensure_initialized():
+        raise HTTPException(
+            status_code=500,
+            detail="Downloader not initialized. Please ensure cookies.txt is provided and valid."
+        )
 
     normalized_codec = nrmlcdclbl(request.codec)
     if normalized_codec in {"alac", "dolby"} and not request.use_wrapper:

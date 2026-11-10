@@ -402,10 +402,8 @@ async def srchhd():
 # 音乐与媒体目录搜索端点
 @router.get("/search")
 async def srchaplrtr(request: Request, term: str = Query(..., description="Search term")):
-    if not manager.is_initialized:
-        success = await manager.initialize()
-        if not success:
-            raise HTTPException(status_code=500, detail="Downloader not initialized.")
+    if not await manager.ensure_initialized():
+        raise HTTPException(status_code=500, detail="Downloader not initialized.")
 
     try:
         item_type, item_id = prsaplurl(term)

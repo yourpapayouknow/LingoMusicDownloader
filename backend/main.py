@@ -2,7 +2,6 @@
 from backend.head import FastAPI, CORSMiddleware, uvicorn, logging, sys
 from backend.core.config import settings
 from backend.api.routes import router as api_router
-from backend.services.downloader import manager
 
 # 统一重定向Windows标准控制台输出编码
 if hasattr(sys.stdout, "reconfigure"):
@@ -32,15 +31,10 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api")
 
 
-# 执行服务启动异步初始化任务
+# 记录服务就绪日志（下载引擎改为首个业务请求时懒初始化）
 @app.on_event("startup")
 async def strtpevt():
-    logger.info("Initializing gamdl downloader...")
-    success = await manager.initialize()
-    if success:
-        logger.info("Downloader initialized successfully.")
-    else:
-        logger.warning("Downloader initialization failed. Ensure cookies.txt is present.")
+    logger.info("Backend ready. Downloader engine will initialize on first request.")
 
 
 # 读取API服务根路径欢迎信息端点

@@ -1,6 +1,6 @@
 # 核心下载调度器、多线程队列与音质转码引擎模块
 from backend.head import (
-    asyncio, copy, os, logging, subprocess, socket, re, shutil, tempfile,
+    asyncio, copy, os, json, logging, subprocess, socket, re, shutil, tempfile,
     unicodedata, MozillaCookieJar, Path, Dict, Any, Optional, List,
     urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen, httpx,
     Retry, RetryTransport,
@@ -8,7 +8,7 @@ from backend.head import (
     AppleMusicApi, ItunesApi,
 )
 
-from backend.db.database import inshstry as insert_history, gtallstngs as get_all_settings
+from backend.db.database import inshstry as insert_history, gtallstngs as get_all_settings, insdwnldtsk as insert_download_task
 from backend.api.common import (
     itnsarttmpl as _itunes_artwork_template,
     nrmlcdclbl as _normalize_codec_label,
@@ -41,6 +41,9 @@ SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC = "lingomusic-transcode-alac-to-flac"
 SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV = "lingomusic-transcode-alac-to-wav"
 SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4 = "lingomusic-transcode-alac-to-mp4"
 SETTINGS_KEY_METADATA_REGION = "lingomusic-metadata-region"
+
+# 内存中保留的下载任务状态条目上限
+DOWNLOAD_STATUS_MAX = 50
 
 TRANSCODE_TRUE_VALUES = {"1", "true", "yes", "on"}
 # HLS 分片的 codecs 字段用 MP4A 对象类型标识，音频资产元数据用简写标识
@@ -943,6 +946,16 @@ class DownloadManager:
         # asyncio only keeps *weak* refs; without this the GC destroys
         # pending tasks mid-run and causes 'aclose() already running'.
         self._tasks: set = set()
+        self._init_lock = asyncio.Lock()
+
+    # 幂等懒初始化：首个业务请求触发，避免启动期网络抓取
+    async def ensure_initialized(self) -> bool:
+        if self.is_initialized:
+            return True
+        async with self._init_lock:
+            if self.is_initialized:
+                return True
+            return await self.initialize()
 
     # 初始化Apple Music下载引擎及鉴权客户端
     async def initialize(self):
@@ -1305,11 +1318,42 @@ class DownloadManager:
             self.download_status[url]["status"] = "error"
             self.download_status[url]["error"] = str(e)
         finally:
+            self._finalprcstts(url)
             for client in getattr(downloader, "_lingo_cleanup_clients", []) or []:
                 try:
                     await client.aclose()
                 except Exception:
                     pass
+
+    # 任务终态落盘SQLite并裁剪内存状态字典
+    def _finalprcstts(self, url: str) -> None:
+        task = self.download_status.get(url)
+        if not task:
+            return
+        try:
+            insert_download_task({
+                "url": url,
+                "status": task.get("status", ""),
+                "codec": task.get("codec", ""),
+                "resolution": task.get("resolution", ""),
+                "items_json": json.dumps(task.get("items", []), ensure_ascii=False),
+                "error": task.get("error", ""),
+                "file_path": task.get("file_path", ""),
+            })
+        except Exception as e:
+            logger.error("Failed to persist download task snapshot: %s", e)
+
+        # 内存只保留最近DOWNLOAD_STATUS_MAX条任务，防止单会话无限累积
+        try:
+            if len(self.download_status) > DOWNLOAD_STATUS_MAX:
+                stale = [
+                    key for key, value in self.download_status.items()
+                    if value.get("status") in {"completed", "error"}
+                ][: len(self.download_status) - DOWNLOAD_STATUS_MAX]
+                for key in stale:
+                    del self.download_status[key]
+        except Exception as e:
+            logger.error("Failed to prune download_status: %s", e)
 
     # 更新单曲下载状态并标记完成
     def _mark_item_completed(self, url: str, index: int, metadata: Dict[str, Any]) -> None:
