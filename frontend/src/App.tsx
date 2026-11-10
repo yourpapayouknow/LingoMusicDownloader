@@ -1,6 +1,6 @@
 // 前端主应用单页容器与各视图聚合交互组件
-import { useCallback, useEffect, useRef, useState } from './head'
-import logoImage from './assets/lingomusiclogo.png'
+import { useCallback, useEffect, useMemo, useRef, useState } from './head'
+import logoImage from './assets/lingomusiclogo-sm.png'
 import './app.css'
 import { useTheme } from './theme/ThemeProvider'
 import {
@@ -348,6 +348,7 @@ export default function App() {
 
   // Audio Player State
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const lastTimeUpdateRef = useRef(0)
   const lyricsStageRef = useRef<HTMLDivElement | null>(null)
   const [playingTrack, setPlayingTrack] = useState<SearchResult | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -1467,6 +1468,12 @@ export default function App() {
 
   // Audio lifecycle bindings
   const onAudioTimeUpdate = () => {
+    // 限制进度刷新频率，避免播放时每秒触发4次全树重渲染
+    const now = Date.now()
+    if (now - lastTimeUpdateRef.current < 250) {
+      return
+    }
+    lastTimeUpdateRef.current = now
     if (audioRef.current) {
       setPlaybackTime(audioRef.current.currentTime)
     }
@@ -1850,7 +1857,7 @@ export default function App() {
     cover: string
     folderPath: string
     tracks: HistoryItem[]
-  }> = (() => {
+  }> = useMemo(() => {
     const groups = new Map<string, {
       id: string
       title: string
@@ -1890,7 +1897,7 @@ export default function App() {
     }
 
     return Array.from(groups.values())
-  })()
+  }, [downloadHistory])
 
   // Handle recommendation tag toggle logic
   const handleFilterChange = (key: 'all' | 'song' | 'album' | 'artist' | 'mv', checked: boolean) => {
@@ -1941,6 +1948,7 @@ export default function App() {
       {/* Hidden audio tag */}
       <audio
         ref={audioRef}
+        preload="metadata"
         onTimeUpdate={onAudioTimeUpdate}
         onLoadedMetadata={onAudioLoadedMetadata}
         onEnded={onAudioEnded}
@@ -2232,7 +2240,7 @@ export default function App() {
                       <HStack justify="space-between" align="center" gap="normal">
                         <HStack align="center" gap="compact" style={{ minWidth: 0, flex: 1 }}>
                           <Image
-                            src={entry.source === 'preview' ? getArtworkUrl(entry.artworkUrl, 96) : entry.artworkUrl}
+                            src={getArtworkUrl(entry.artworkUrl, 96)}
                             alt={entry.title}
                             radius={6}
                             style={{ width: '44px', height: '44px', flexShrink: 0 }}

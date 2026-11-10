@@ -399,6 +399,35 @@ async def strmlclad(track_id: str):
 
 
 # 获取本地音频内嵌封面图像端点
+# 压缩内嵌封面至最大512px并落盘缓存
+def rzsccovrcch(track_id: str, file_path: str) -> tuple[bytes, str]:
+    import io
+    from PIL import Image
+    cache_dir = os.path.join(settings.bsdir(), "data", "artwork_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    stat = os.stat(file_path)
+    cache_name = f"{sftrkidfn(track_id)}_{stat.st_mtime_ns}.jpg"
+    cache_path = os.path.join(cache_dir, cache_name)
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
+        return Path(cache_path).read_bytes(), "image/jpeg"
+
+    cover_bytes, _ = extrcovr(file_path)
+    with Image.open(io.BytesIO(cover_bytes)) as img:
+        img = img.convert("RGB")
+        img.thumbnail((512, 512))
+        img.save(cache_path, "JPEG", quality=85)
+
+    prefix = f"{sftrkidfn(track_id)}_"
+    for name in os.listdir(cache_dir):
+        if name.startswith(prefix) and name != cache_name:
+            try:
+                os.remove(os.path.join(cache_dir, name))
+            except OSError:
+                pass
+    return Path(cache_path).read_bytes(), "image/jpeg"
+
+
+# 读取本地内嵌封面端点
 @router.get("/local-artwork/{track_id}")
 async def gtlchart(track_id: str):
     track = gthstrybytrk(track_id)
@@ -410,7 +439,7 @@ async def gtlchart(track_id: str):
         raise HTTPException(status_code=404, detail="Audio file not found on disk")
 
     try:
-        result = await asyncio.to_thread(extrcovr, file_path)
+        result = await asyncio.to_thread(rzsccovrcch, track_id, file_path)
     except Exception as e:
         logger.warning("Read local artwork failed: %s | %s", e, file_path)
         result = None
