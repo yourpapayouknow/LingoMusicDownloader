@@ -75,9 +75,8 @@ export function prslrc(content: string): { timed: LrcLine[]; plain: string[] } {
   return { timed, plain }
 }
 
-// 兼容性别名导出
-export const getArtworkUrl = gtarturl
-export const formatTime = fmttm
-export const normalizeCodecLabel = nrmlcdclbl
-export const getParentPath = gtprntpth
-export const parseLrcContent = prslrc
+// 提取异常对象的可读消息
+export function gterrmsg(err: unknown): string {
+  if (err instanceof Error) return err.message
+  return String(err)
+}

@@ -5,11 +5,25 @@ export interface DownloadItem {
   status: 'pending' | 'downloading' | 'completed' | 'error'
   error?: string
   hint?: string
+  track_id?: string
+  name?: string
+  artist_name?: string
+  album_name?: string
+  artwork_url?: string
+  file_path?: string
+  lyrics_path?: string
+  file_size?: number
+  already_exists?: boolean
 }
 
 export interface DownloadQueueItem {
   status: 'pending' | 'downloading' | 'processing' | 'completed' | 'error'
   error?: string
+  hint?: string
+  warning?: string
+  codec?: string
+  resolution?: string
+  file_path?: string
   items: DownloadItem[]
 }
 
@@ -43,6 +57,7 @@ export interface SearchResult {
       width: number
       height: number
     }
+    previews?: Array<{ url: string }>
   }
 }
 
@@ -62,14 +77,6 @@ export interface CookieLoginFinalizeResponse {
   apple_login_url?: string
 }
 
-export interface CookieLoginProbeResponse {
-  success: boolean
-  message: string
-  login_detected: boolean
-  cookies_count: number
-  has_media_user_token: boolean
-  source_db?: string
-}
 
 export interface HistoryItem {
   id: number
@@ -264,13 +271,6 @@ export async function fnllgn(payload: {
 }
 
 
-// 探测WebView登录认证状态
-export async function prblgn(payload: {
-  profile_hint?: string
-  started_at_ms?: number
-}): Promise<CookieLoginProbeResponse> {
-  return postjson<CookieLoginProbeResponse>(`${BASE_URL}/cookie-login/probe`, payload, 'Failed to probe cookie login')
-}
 
 
 // 获取客户端全部设置字典
@@ -314,11 +314,11 @@ export async function rprtsrch(keyword: string): Promise<unknown> {
 
 
 // 构造本地音频播放流地址
-export const getLocalPlayUrl = (trackId: string) => `${BASE_URL}/local-play/${encodeURIComponent(trackId)}`
+export const gtlclurl = (trackId: string) => `${BASE_URL}/local-play/${encodeURIComponent(trackId)}`
 
 
 // 构造本地封面图资源地址
-export const getLocalArtworkUrl = (trackId: string) => `${BASE_URL}/local-artwork/${encodeURIComponent(trackId)}`
+export const gtlclart = (trackId: string) => `${BASE_URL}/local-artwork/${encodeURIComponent(trackId)}`
 
 
 // 打开下载目标文件目录
@@ -396,28 +396,3 @@ export async function wrprint(payload: {
 }
 
 
-// 兼容性别名导出
-export const searchAppleMusic = srchapl
-export const submitDownload = sbmtdwnld
-export const getStatus = gtstts
-export const getHealth = gthlth
-export const saveCookies = svcks
-export const finalizeCookieLogin = fnllgn
-export const probeCookieLogin = prblgn
-export const getSettingsApi = gtstngs
-export const saveSettingsApi = svstngs
-export const getHistoryApi = gthstry
-export const deleteHistoryApi = dlthstry
-export const getRecommendationsApi = gtrecmdtn
-export const reportSearchApi = rprtsrch
-export const openFolderApi = opnfldr
-export const openConvertedFolderApi = opncnvtfldr
-export const scanLocalApi = scnlcl
-export const getLocalLyricsApi = gtlcllrc
-export const getWsl2InstallPrecheckApi = wslprchk
-export const startWsl2InstallApi = wslstrt
-export const getWsl2InstallStatusApi = wslstts
-export const getWrapperSetupPrecheckApi = wrprprchk
-export const startWrapperSetupApi = wrprstrt
-export const getWrapperSetupStatusApi = wrprstts
-export const submitWrapperSetupInputApi = wrprint

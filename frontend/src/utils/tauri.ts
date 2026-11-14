@@ -190,10 +190,3 @@ export async function prbapllgn(
 }
 
 
-// 兼容性别名导出
-export const isTauri = istri
-export const minimizeWindow = minwin
-export const maximizeWindow = maxwin
-export const closeWindow = clswin
-export const openAppleMusicLoginWindow = opnapllgn
-export const probeAppleMusicLoginWindowCookies = prbapllgn

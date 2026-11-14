@@ -35,27 +35,25 @@ import {
   type ToastTone,
 } from './ui/components'
 import {
-  searchAppleMusic,
-  submitDownload,
-  getStatus,
-  getHealth,
-  saveCookies,
-  finalizeCookieLogin,
-  getWsl2InstallPrecheckApi,
-  startWsl2InstallApi,
-  getWsl2InstallStatusApi,
-  getWrapperSetupPrecheckApi,
-  startWrapperSetupApi,
-  getWrapperSetupStatusApi,
-  submitWrapperSetupInputApi,
-  type SearchResult,
-  type HealthStatus,
-  type Wsl2InstallPrecheckResponse,
-  type Wsl2InstallStatusResponse,
-  type WrapperSetupPrecheckResponse,
-  type WrapperSetupStatusResponse,
-  getSettingsApi, saveSettingsApi, getHistoryApi, deleteHistoryApi, getRecommendationsApi, reportSearchApi, getLocalPlayUrl, getLocalArtworkUrl, getLocalLyricsApi, openFolderApi, openConvertedFolderApi, scanLocalApi, type HistoryItem} from './utils/api'
-import { minimizeWindow, maximizeWindow, closeWindow, isTauri, openAppleMusicLoginWindow, probeAppleMusicLoginWindowCookies } from './utils/tauri'
+  srchapl, sbmtdwnld, gtstts, gthlth, svcks, fnllgn,
+  wslprchk, wslstrt, wslstts, wrprprchk, wrprstrt, wrprstts, wrprint,
+  gtstngs, svstngs, gthstry, dlthstry, gtrecmdtn, rprtsrch,
+  gtlclurl, gtlclart, gtlcllrc, opnfldr, opncnvtfldr, scnlcl,
+  type SearchResult, type HealthStatus,
+  type Wsl2InstallPrecheckResponse, type Wsl2InstallStatusResponse,
+  type WrapperSetupPrecheckResponse, type WrapperSetupStatusResponse,
+  type DownloadItem, type DownloadQueueItem, type HistoryItem,
+} from './utils/api'
+import { minwin, maxwin, clswin, istri, opnapllgn, prbapllgn } from './utils/tauri'
+import {
+  gtarturl,
+  fmttm,
+  nrmlcdclbl,
+  gtprntpth,
+  prslrc,
+  gterrmsg,
+  type LrcLine,
+} from './utils/format'
 
 // Settings keys
 const SETTINGS_KEY_CODEC = 'lingomusic-codec'
@@ -124,15 +122,6 @@ const INIT_AGREEMENT_PARAGRAPHS = [
   '12. 协议更新：本协议可能随版本调整而更新。继续使用新版本功能即视为接受更新后的条款。',
   '若您不同意上述任何条款，请点击“不同意并退出”立即停止使用本软件。'
 ]
-
-import {
-  getArtworkUrl,
-  formatTime,
-  normalizeCodecLabel,
-  getParentPath,
-  parseLrcContent,
-  type LrcLine,
-} from './utils/format'
 
 const mockLyrics = [
   '开启无损高品质音乐新时代',
@@ -386,7 +375,7 @@ export default function App() {
         throw new Error('popup_blocked')
       }
       pushToast('已打开链接', `正在打开：${targetLabel}`, 'success')
-    } catch (error) {
+    } catch {
       pushToast('打开失败', `无法打开链接：${targetLabel}`, 'error')
     }
   }, [pushToast])
@@ -404,8 +393,8 @@ export default function App() {
   }, [])
 
   const handleDisagreeAndExit = useCallback(() => {
-    if (isTauri()) {
-      closeWindow()
+    if (istri()) {
+      clswin()
       return
     }
     window.close()
@@ -445,7 +434,7 @@ export default function App() {
     // 窗口销毁前优先通过Tauri内存接口抓取最新Cookies
     const captureLiveCookiesBeforeClose = async (windowLabel: string) => {
       try {
-        const probe = await probeAppleMusicLoginWindowCookies(windowLabel)
+        const probe = await prbapllgn(windowLabel)
         if (probe.cookiesCount > 0) {
           observedPreLoginCookies = true
         }
@@ -472,7 +461,7 @@ export default function App() {
         let result: { success: boolean; message: string; cookies_count: number }
         const content = liveCookieContent.trim()
         if (content) {
-          const saveResult = await saveCookies(content)
+          const saveResult = await svcks(content)
           result = {
             success: Boolean(saveResult.success),
             message: saveResult.message || 'Cookies 已保存并完成初始化',
@@ -485,7 +474,7 @@ export default function App() {
             cookies_count: 0,
           }
         } else {
-          const finalizedResult = await finalizeCookieLogin({
+          const finalizedResult = await fnllgn({
             profile_hint: 'apple-music-login',
             started_at_ms: startedAtMs,
           })
@@ -497,7 +486,7 @@ export default function App() {
         }
 
         try {
-          const [statusData, health] = await Promise.all([getStatus(), getHealth()])
+          const [statusData, health] = await Promise.all([gtstts(), gthlth()])
           setDownloaderInitialized(statusData.is_initialized)
           setHealthStatus(health)
         } catch (syncErr) {
@@ -514,9 +503,9 @@ export default function App() {
         } else {
           pushToast('登录未完成', result.message || '未检测到有效登录态', 'error')
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error(err)
-        pushToast('登录校验失败', err.message || '无法导出登录 Cookies', 'error')
+        pushToast('登录校验失败', gterrmsg(err) || '无法导出登录 Cookies', 'error')
       } finally {
         setInitCookieLoggingIn(false)
       }
@@ -526,7 +515,7 @@ export default function App() {
       if (finalized || probeInFlight || !loginWindowSession) return
       probeInFlight = true
       try {
-        const probe = await probeAppleMusicLoginWindowCookies(loginWindowSession.label)
+        const probe = await prbapllgn(loginWindowSession.label)
         if (probe.cookiesCount > 0) {
           observedPreLoginCookies = true
         }
@@ -544,14 +533,14 @@ export default function App() {
             void finalizeAfterWindowClosed()
           }
         }
-      } catch (e) {
+      } catch {
         // Keep silent during probing; login may still be in progress.
       } finally {
         probeInFlight = false
       }
     }
 
-    if (!isTauri()) {
+    if (!istri()) {
       window.open('https://music.apple.com/cn/new', '_blank', 'noopener,noreferrer')
       pushToast('已打开网页', '请完成登录后手动导出 Cookies（当前为浏览器模式）', 'info')
       return
@@ -559,7 +548,7 @@ export default function App() {
 
     setInitCookieLoggingIn(true)
     try {
-      loginWindowSession = await openAppleMusicLoginWindow({
+      loginWindowSession = await opnapllgn({
         dataDirectory: 'apple-music-login',
         onBeforeClose: captureLiveCookiesBeforeClose,
         onClosed: () => {
@@ -592,14 +581,14 @@ export default function App() {
         void probeLoginState()
       }, 1200)
       void probeLoginState()
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
       finalized = true
       stopProbe()
       loginFinalizeRef.current = null
       loginWindowSessionRef.current = null
       setInitCookieLoggingIn(false)
-      pushToast('启动失败', err.message || '无法打开 Apple Music 登录窗口', 'error')
+      pushToast('启动失败', gterrmsg(err) || '无法打开 Apple Music 登录窗口', 'error')
     }
   }, [initCookieLoggingIn, pushToast])
 
@@ -608,7 +597,7 @@ export default function App() {
     userManuallyOpenedInitGuideRef.current = false
     localStorage.setItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED, 'true')
     setInitGuideOpen(false)
-    saveSettingsApi({
+    svstngs({
       [SETTINGS_KEY_INIT_GUIDE_DISMISSED]: 'true'
     }).catch(console.error)
   }, [])
@@ -621,7 +610,7 @@ export default function App() {
     }
     setSkipWrapperAutostart(false)
     localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
-    saveSettingsApi({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
+    svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
     dismissInitGuide()
   }, [initWrapperConfigured, dismissInitGuide])
 
@@ -648,7 +637,7 @@ export default function App() {
   }, [])
 
   const syncWslInstallStatus = useCallback(async () => {
-    const status = await getWsl2InstallStatusApi()
+    const status = await wslstts()
     setWslInstallStatusData(status)
 
     if (status.completed) {
@@ -660,7 +649,7 @@ export default function App() {
         if (status.success_flag) {
           pushToast('安装完成', status.message || 'WSL2 安装与配置已完成', 'success')
           try {
-            const [statusData, health] = await Promise.all([getStatus(), getHealth()])
+            const [statusData, health] = await Promise.all([gtstts(), gthlth()])
             setDownloaderInitialized(statusData.is_initialized)
             setHealthStatus(health)
           } catch (syncErr) {
@@ -685,8 +674,8 @@ export default function App() {
 
     try {
       const [precheck, status] = await Promise.all([
-        getWsl2InstallPrecheckApi(),
-        getWsl2InstallStatusApi(),
+        wslprchk(),
+        wslstts(),
       ])
       setWslInstallPrecheck(precheck)
       setWslInstallStatusData(status)
@@ -697,9 +686,9 @@ export default function App() {
           syncWslInstallStatus().catch(console.error)
         }, 1200)
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      pushToast('检查失败', err.message || '无法获取WSL2安装状态', 'error')
+      pushToast('检查失败', gterrmsg(err) || '无法获取WSL2安装状态', 'error')
     } finally {
       setWslInstallLoading(false)
     }
@@ -715,7 +704,7 @@ export default function App() {
     wslInstallCompletedNotifiedRef.current = false
 
     try {
-      const startRes = await startWsl2InstallApi({ required_gb: 15 })
+      const startRes = await wslstrt({ required_gb: 15 })
       if (!startRes.success) {
         pushToast('无法安装', startRes.message || 'WSL2 安装前检查未通过', 'error')
         setWslInstallLoading(false)
@@ -733,9 +722,9 @@ export default function App() {
       wslInstallPollTimerRef.current = window.setInterval(() => {
         syncWslInstallStatus().catch(console.error)
       }, 1200)
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      pushToast('启动失败', err.message || '无法启动 WSL2 安装流程', 'error')
+      pushToast('启动失败', gterrmsg(err) || '无法启动 WSL2 安装流程', 'error')
       setWslInstallLoading(false)
     }
   }, [wslInstallLoading, wslInstallPrecheck, pushToast, stopWslInstallPolling, syncWslInstallStatus])
@@ -754,7 +743,7 @@ export default function App() {
   }, [])
 
   const syncWrapperSetupStatus = useCallback(async () => {
-    const status = await getWrapperSetupStatusApi()
+    const status = await wrprstts()
     setWrapperSetupStatusData(status)
 
     if (status.awaiting_input) {
@@ -773,10 +762,10 @@ export default function App() {
         if (status.success_flag) {
           setSkipWrapperAutostart(false)
           localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
-          saveSettingsApi({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
+          svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
           pushToast('Wrapper已就绪', status.message || 'Wrapper正在运行', 'success')
           try {
-            const [statusData, health] = await Promise.all([getStatus(), getHealth()])
+            const [statusData, health] = await Promise.all([gtstts(), gthlth()])
             setDownloaderInitialized(statusData.is_initialized)
             setHealthStatus(health)
           } catch (syncErr) {
@@ -802,8 +791,8 @@ export default function App() {
 
     try {
       const [precheck, status] = await Promise.all([
-        getWrapperSetupPrecheckApi(),
-        getWrapperSetupStatusApi(),
+        wrprprchk(),
+        wrprstts(),
       ])
       setWrapperSetupPrecheck(precheck)
       setWrapperSetupStatusData(status)
@@ -815,9 +804,9 @@ export default function App() {
           syncWrapperSetupStatus().catch(console.error)
         }, 1100)
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      pushToast('检查失败', err.message || '无法获取Wrapper状态', 'error')
+      pushToast('检查失败', gterrmsg(err) || '无法获取Wrapper状态', 'error')
     } finally {
       setWrapperSetupLoading(false)
     }
@@ -830,7 +819,7 @@ export default function App() {
     wrapperSetupCompletedNotifiedRef.current = false
 
     try {
-      const startRes = await startWrapperSetupApi({ force_restart: forceRestart })
+      const startRes = await wrprstrt({ force_restart: forceRestart })
       if (!startRes.success) {
         if (!isSilent) {
           pushToast(forceRestart ? '无法重启' : '无法启动', startRes.message || 'Wrapper启动前检查未通过', 'error')
@@ -849,10 +838,10 @@ export default function App() {
         setWrapperSetupLoading(false)
       }
       return true
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
       if (!isSilent) {
-        pushToast(forceRestart ? '重启失败' : '启动失败', err.message || '无法启动Wrapper流程', 'error')
+        pushToast(forceRestart ? '重启失败' : '启动失败', gterrmsg(err) || '无法启动Wrapper流程', 'error')
       }
       setWrapperSetupLoading(false)
       return false
@@ -893,7 +882,7 @@ export default function App() {
           return
         }
 
-        const res = await submitWrapperSetupInputApi({
+        const res = await wrprint({
           input_type: 'credentials',
           apple_id: appleId,
           password,
@@ -914,7 +903,7 @@ export default function App() {
           return
         }
 
-        const res = await submitWrapperSetupInputApi({
+        const res = await wrprint({
           input_type: '2fa',
           code,
         })
@@ -932,9 +921,9 @@ export default function App() {
       wrapperSetupPollTimerRef.current = window.setInterval(() => {
         syncWrapperSetupStatus().catch(console.error)
       }, 1100)
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      pushToast('提交失败', err.message || '无法提交Wrapper输入', 'error')
+      pushToast('提交失败', gterrmsg(err) || '无法提交Wrapper输入', 'error')
     } finally {
       setWrapperInputSubmitting(false)
     }
@@ -983,7 +972,7 @@ export default function App() {
   }, [stopWslInstallPolling, stopWrapperSetupPolling])
 
   const buildPreviewPlaylistEntry = useCallback((track: SearchResult): PlaylistEntry | null => {
-    const previewUrl = (track.attributes as any).previews?.[0]?.url as string | undefined
+    const previewUrl = track.attributes.previews?.[0]?.url as string | undefined
     if (!previewUrl) return null
     return {
       key: `preview:${track.id}`,
@@ -1036,7 +1025,7 @@ export default function App() {
   useEffect(() => {
     if (!settingsLoaded) return
     localStorage.setItem(SETTINGS_KEY_METADATA_REGION, metadataRegion)
-    saveSettingsApi({
+    svstngs({
       [SETTINGS_KEY_CODEC]: codec,
       [SETTINGS_KEY_RESOLUTION]: resolution,
       [SETTINGS_KEY_METADATA_REGION]: metadataRegion,
@@ -1081,17 +1070,17 @@ export default function App() {
   // Poll Downloads Status & Backend Health
   const fetchStatusAndHealth = useCallback(async () => {
     try {
-      const statusData = await getStatus()
+      const statusData = await gtstts()
       setDownloaderInitialized(statusData.is_initialized)
 
-      const health = await getHealth()
+      const health = await gthlth()
       setHealthStatus(health)
 
       // 同步初始化与登录就绪状态
       if (!userManuallyOpenedInitGuideRef.current && (statusData.is_initialized || health.cookies_ok)) {
         if (localStorage.getItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED) !== 'true') {
           localStorage.setItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED, 'true')
-          saveSettingsApi({ [SETTINGS_KEY_INIT_GUIDE_DISMISSED]: 'true' }).catch(console.error)
+          svstngs({ [SETTINGS_KEY_INIT_GUIDE_DISMISSED]: 'true' }).catch(console.error)
         }
         setInitGuideOpen(false)
       }
@@ -1099,7 +1088,7 @@ export default function App() {
       // Sync active downloading queue from backend
       if (statusData.downloads) {
         const activeQueue: QueueItem[] = []
-        Object.entries(statusData.downloads).forEach(([url, item]: [string, any]) => {
+        Object.entries(statusData.downloads).forEach(([url, item]: [string, DownloadQueueItem]) => {
           const rawItems = Array.isArray(item.items) ? item.items : []
           const children: Array<{
             trackId: string
@@ -1110,7 +1099,7 @@ export default function App() {
             file_path?: string
             status: 'pending' | 'downloading' | 'completed' | 'error'
             error?: string
-          }> = rawItems.map((child: any, idx: number) => ({
+          }> = rawItems.map((child: DownloadItem, idx: number) => ({
             trackId: String(child?.track_id || `${url}-${idx}`),
             name: (child?.name as string | undefined) || `曲目 ${idx + 1}`,
             artistName: child?.artist_name as string | undefined,
@@ -1144,7 +1133,7 @@ export default function App() {
           const albumName = firstMediaItem?.albumName
           const trackName = firstMediaItem?.name
           const artistName = firstMediaItem?.artistName
-          const cover = getArtworkUrl(firstMediaItem?.artworkUrl, 150)
+          const cover = gtarturl(firstMediaItem?.artworkUrl, 150)
 
           let displayTitle = `任务 (${firstMediaItem?.trackId || 'Unknown'})`
           if (isAlbumTask) {
@@ -1153,7 +1142,7 @@ export default function App() {
             displayTitle = artistName ? `${artistName} - ${trackName}` : trackName
           }
 
-          const qualityStr = isAlbumTask ? '专辑' : (isMvTask ? 'mv' : normalizeCodecLabel(item.codec))
+          const qualityStr = isAlbumTask ? '专辑' : (isMvTask ? 'mv' : nrmlcdclbl(item.codec))
           const taskId = isAlbumTask
             ? `album:${encodeURIComponent(url)}`
             : String(firstMediaItem?.trackId || url.split('/').pop()?.split('?')[0] || 'Unknown')
@@ -1174,7 +1163,7 @@ export default function App() {
               name: child.name,
               artistName: child.artistName,
               file_path: child.file_path,
-              cover: child.artworkUrl ? getArtworkUrl(child.artworkUrl, 96) : cover,
+              cover: child.artworkUrl ? gtarturl(child.artworkUrl, 96) : cover,
               status: child.status,
               error: child.error,
             })) : undefined,
@@ -1195,7 +1184,7 @@ export default function App() {
     fetchStatusAndHealth()
     
     // Fetch Settings
-    getSettingsApi().then(settings => {
+    gtstngs().then(settings => {
       if (settings[SETTINGS_KEY_CODEC]) setCodec(String(settings[SETTINGS_KEY_CODEC]))
       if (settings[SETTINGS_KEY_RESOLUTION]) setResolution(String(settings[SETTINGS_KEY_RESOLUTION]))
       if (settings[SETTINGS_KEY_METADATA_REGION]) {
@@ -1248,10 +1237,10 @@ export default function App() {
     })
 
     // Fetch Recommendations
-    getRecommendationsApi().then(res => setRecommendations(res.recommendations || [])).catch(console.error)
+    gtrecmdtn().then(res => setRecommendations(res.recommendations || [])).catch(console.error)
     
     // Fetch History
-    getHistoryApi().then(res => {
+    gthstry().then(res => {
       setDownloadHistory(res)
     }).catch(console.error)
 
@@ -1339,7 +1328,7 @@ export default function App() {
 
   // Play Preview Action
   const playTrackPreview = useCallback((track: SearchResult, options?: { syncPlaylist?: boolean }) => {
-    const previewUrl = (track.attributes as any).previews?.[0]?.url
+    const previewUrl = track.attributes.previews?.[0]?.url
     if (!previewUrl) {
       pushToast('无法播放', '该结果暂无在线预览音轨，点击“下载”可获取完整品质音频', 'error')
       return
@@ -1504,8 +1493,8 @@ export default function App() {
     setSearchLoading(true)
     setSearchError('')
     try {
-      const response = await searchAppleMusic(searchKeyword)
-      reportSearchApi(searchKeyword).catch(console.error)
+      const response = await srchapl(searchKeyword)
+      rprtsrch(searchKeyword).catch(console.error)
       let list: SearchResult[] = []
 
       if (response.success && response.results) {
@@ -1518,10 +1507,10 @@ export default function App() {
       
       const timeStr = new Date().toLocaleTimeString()
       setTerminalLogs(prev => [...prev, `[${timeStr}] [搜索请求] 关键字: "${searchKeyword}"，检索出 ${list.length} 个结果`].slice(-25))
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      setSearchError(err.message || '搜索接口异常，请确认后端服务是否运行')
-      pushToast('搜索失败', err.message || '调用代理搜索失败', 'error')
+      setSearchError(gterrmsg(err) || '搜索接口异常，请确认后端服务是否运行')
+      pushToast('搜索失败', gterrmsg(err) || '调用代理搜索失败', 'error')
     } finally {
       setSearchLoading(false)
     }
@@ -1551,14 +1540,14 @@ export default function App() {
 
     // Submit to backend API
     try {
-      await submitDownload(trackUrl, codec, resolution, useWrapper, metadataRegion)
+      await sbmtdwnld(trackUrl, codec, resolution, useWrapper, metadataRegion)
       // Trigger instant poll to show the new item
       setTimeout(fetchStatusAndHealth, 500)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Backend download submission failed:', err)
-      pushToast('任务提交失败', `无法将 “${title}” 提交至后台：${err.message || err}`, 'error')
+      pushToast('任务提交失败', `无法将 “${title}” 提交至后台：${gterrmsg(err) || err}`, 'error')
       const errTime = new Date().toLocaleTimeString()
-      setTerminalLogs(prev => [...prev, `[${errTime}] [核心调度] 任务提交异常: ${err.message || '后端连接失败'}`].slice(-25))
+      setTerminalLogs(prev => [...prev, `[${errTime}] [核心调度] 任务提交异常: ${gterrmsg(err) || '后端连接失败'}`].slice(-25))
     }
   }
 
@@ -1584,12 +1573,12 @@ export default function App() {
     setDeletingHistoryGroupId(groupId)
     try {
       const results = await Promise.allSettled(
-        tracks.map((track) => deleteHistoryApi(track.track_id, true))
+        tracks.map((track) => dlthstry(track.track_id, true))
       )
       const successCount = results.filter((item) => item.status === 'fulfilled').length
       const failedCount = results.length - successCount
 
-      const refreshed = await getHistoryApi()
+      const refreshed = await gthstry()
       setDownloadHistory(refreshed)
       setOpenHistoryAlbums((prev) => ({ ...prev, [groupId]: false }))
 
@@ -1598,9 +1587,9 @@ export default function App() {
       } else {
         pushToast('删除完成', `已删除 ${successCount} 首曲目`, 'success')
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      pushToast('删除失败', err.message || '整专删除失败，请稍后重试', 'error')
+      pushToast('删除失败', gterrmsg(err) || '整专删除失败，请稍后重试', 'error')
     } finally {
       setDeletingHistoryGroupId((current) => (current === groupId ? null : current))
     }
@@ -1608,8 +1597,8 @@ export default function App() {
 
   const loadLocalLyricsForTrack = useCallback(async (trackId: string) => {
     try {
-      const res = await getLocalLyricsApi(trackId)
-      const parsed = parseLrcContent(res.content || '')
+      const res = await gtlcllrc(trackId)
+      const parsed = prslrc(res.content || '')
       if (parsed.timed.length > 0) {
         setTimedLyrics(parsed.timed)
         setPlainLyrics([])
@@ -1642,7 +1631,7 @@ export default function App() {
   ) => {
     if (!audioRef.current) return
 
-    const localUrl = getLocalPlayUrl(trackId)
+    const localUrl = gtlclurl(trackId)
     const fakeTrack: SearchResult = {
       id: trackId,
       type: 'songs',
@@ -1734,7 +1723,7 @@ export default function App() {
           height: 150
         },
         previews: [{ url: entry.previewUrl }]
-      } as any
+      }
     }
     playTrackPreview(previewTrack, { syncPlaylist: false })
   }, [playlistEntries, pushToast, startLocalPlayback, playTrackPreview])
@@ -1782,7 +1771,7 @@ export default function App() {
       {
         name: track.name,
         artistName: track.artist_name || '未知艺术家',
-        artworkUrl: track.artwork_url || getLocalArtworkUrl(track.track_id),
+        artworkUrl: track.artwork_url || gtlclart(track.track_id),
       },
       false
     )
@@ -1794,7 +1783,7 @@ export default function App() {
     if (!cookieText.trim()) return
     setCookieSaving(true)
     try {
-      const res = await saveCookies(cookieText)
+      const res = await svcks(cookieText)
       if (res.success) {
         pushToast('授权成功', 'Cookies 配置更新并重载成功！', 'success')
         setCookieText('')
@@ -1805,9 +1794,9 @@ export default function App() {
       } else {
         pushToast('解析失败', res.message || '格式解析异常，请检查 Cookies txt', 'error')
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      pushToast('文件写入失败', err.message || '无法写入 cookies.txt', 'error')
+      pushToast('文件写入失败', gterrmsg(err) || '无法写入 cookies.txt', 'error')
     } finally {
       setCookieSaving(false)
     }
@@ -1818,13 +1807,13 @@ export default function App() {
     if (scanningLocal) return
     setScanningLocal(true)
     try {
-      const res = await scanLocalApi()
+      const res = await scnlcl()
       const summary = `扫描 ${res.scanned_files} 首，新增 ${res.inserted}，更新 ${res.updated}，跳过 ${res.skipped}，失败 ${res.failed}`
       pushToast('扫描完成', summary, res.failed > 0 ? 'info' : 'success')
-      getHistoryApi().then((rows) => setDownloadHistory(rows)).catch(console.error)
-    } catch (err: any) {
+      gthstry().then((rows) => setDownloadHistory(rows)).catch(console.error)
+    } catch (err) {
       console.error(err)
-      pushToast('扫描失败', err.message || '无法扫描本地曲库', 'error')
+      pushToast('扫描失败', gterrmsg(err) || '无法扫描本地曲库', 'error')
     } finally {
       setScanningLocal(false)
     }
@@ -1880,8 +1869,8 @@ export default function App() {
           id: `history:${key}`,
           title: isAlbumGroup ? albumName : item.name,
           artistName,
-          cover: item.artwork_url ? getArtworkUrl(item.artwork_url, 96) : logoImage,
-          folderPath: getParentPath(item.file_path),
+          cover: item.artwork_url ? gtarturl(item.artwork_url, 96) : logoImage,
+          folderPath: gtprntpth(item.file_path),
           tracks: []
         })
       }
@@ -1889,10 +1878,10 @@ export default function App() {
       const group = groups.get(key)!
       group.tracks.push(item)
       if (!group.folderPath) {
-        group.folderPath = getParentPath(item.file_path)
+        group.folderPath = gtprntpth(item.file_path)
       }
       if ((group.cover === logoImage || !group.cover) && item.artwork_url) {
-        group.cover = getArtworkUrl(item.artwork_url, 96)
+        group.cover = gtarturl(item.artwork_url, 96)
       }
     }
 
@@ -1960,7 +1949,7 @@ export default function App() {
         style={{ 
           paddingBlock: '8px', 
           minHeight: '64px', 
-          paddingRight: isTauri() ? '154px' : '20px' 
+          paddingRight: istri() ? '154px' : '20px' 
         }} 
         data-tauri-drag-region
       >
@@ -1994,7 +1983,7 @@ export default function App() {
 
           <div className="am-display">
             <Image
-              src={playingTrack ? getArtworkUrl(playingTrack.attributes.artwork?.url, 64) : logoImage}
+              src={playingTrack ? gtarturl(playingTrack.attributes.artwork?.url, 64) : logoImage}
               className="am-artwork"
               radius={4}
             />
@@ -2011,7 +2000,7 @@ export default function App() {
               </div>
               <span className="am-time am-time-remaining">
                 {playbackDuration > 0
-                  ? `-${formatTime(Math.max(0, playbackDuration - playbackTime))}`
+                  ? `-${fmttm(Math.max(0, playbackDuration - playbackTime))}`
                   : '-00:00'}
               </span>
             </div>
@@ -2108,15 +2097,15 @@ export default function App() {
           </IconButton>
           <Toggle checked={mode === 'dark'} onChange={toggleMode} label={mode === 'dark' ? '深色' : '浅色'} />
 
-          {isTauri() && (
+          {istri() && (
             <div className="win-controls" style={{ position: 'absolute', right: 0, top: 0, bottom: 0 }}>
-              <button className="win-btn" onClick={minimizeWindow} title="最小化">
+              <button className="win-btn" onClick={minwin} title="最小化">
                 <Icon name="minimize" size={12} />
               </button>
-              <button className="win-btn" onClick={maximizeWindow} title="最大化">
+              <button className="win-btn" onClick={maxwin} title="最大化">
                 <Icon name="maximize" size={12} />
               </button>
-              <button className="win-btn win-btn-close" onClick={closeWindow} title="关闭">
+              <button className="win-btn win-btn-close" onClick={clswin} title="关闭">
                 <Icon name="close" size={12} />
               </button>
             </div>
@@ -2240,7 +2229,7 @@ export default function App() {
                       <HStack justify="space-between" align="center" gap="normal">
                         <HStack align="center" gap="compact" style={{ minWidth: 0, flex: 1 }}>
                           <Image
-                            src={getArtworkUrl(entry.artworkUrl, 96)}
+                            src={gtarturl(entry.artworkUrl, 96)}
                             alt={entry.title}
                             radius={6}
                             style={{ width: '44px', height: '44px', flexShrink: 0 }}
@@ -2382,7 +2371,7 @@ export default function App() {
                   <Grid minItemWidth="290px" gap="normal">
                     {filteredSearchResults.map((item) => {
                       const isCurrentPlaying = playingTrack?.id === item.id
-                      const hasPreview = !!(item.attributes as any).previews?.[0]?.url
+                      const hasPreview = !!item.attributes.previews?.[0]?.url
                       const badgeText = getResultTypeLabel(item.type)
                       const secondaryText =
                         item.type === 'artists'
@@ -2395,7 +2384,7 @@ export default function App() {
                             {/* Artwork Cover */}
                             <div style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
                               <Image
-                                src={getArtworkUrl(item.attributes.artwork?.url, 120)}
+                                src={gtarturl(item.attributes.artwork?.url, 120)}
                                 alt={item.attributes.name}
                                 style={{ width: '56px', height: '56px' }}
                               />
@@ -2456,7 +2445,7 @@ export default function App() {
                   variant="secondary"
                   leadingIcon={<Icon name="folder" size={15} />}
                   onClick={() => {
-                    openFolderApi().catch((err) => pushToast('打开目录失败', err.message || '无法打开目录', 'error'))
+                    opnfldr().catch((err) => pushToast('打开目录失败', gterrmsg(err) || '无法打开目录', 'error'))
                   }}
                 >
                   打开下载文件夹
@@ -2473,7 +2462,7 @@ export default function App() {
                   variant="secondary"
                   leadingIcon={<Icon name="folder" size={15} />}
                   onClick={() => {
-                    openConvertedFolderApi().catch((err) => pushToast('打开目录失败', err.message || '无法打开转换目录', 'error'))
+                    opncnvtfldr().catch((err) => pushToast('打开目录失败', gterrmsg(err) || '无法打开转换目录', 'error'))
                   }}
                 >
                   打开转换文件夹
@@ -2566,7 +2555,7 @@ export default function App() {
                                       variant="ghost"
                                       size={32}
                                       onClick={() => {
-                                        openFolderApi(item.file_path).catch((err) => pushToast('定位失败', err.message || '无法定位本地文件', 'error'))
+                                        opnfldr(item.file_path).catch((err) => pushToast('定位失败', gterrmsg(err) || '无法定位本地文件', 'error'))
                                       }}
                                       title="定位文件"
                                     >
@@ -2614,7 +2603,7 @@ export default function App() {
                                           variant="ghost"
                                           size={26}
                                           onClick={() => {
-                                            openFolderApi(track.file_path || item.file_path).catch((err) => pushToast('定位失败', err.message || '无法定位本地文件', 'error'))
+                                            opnfldr(track.file_path || item.file_path).catch((err) => pushToast('定位失败', gterrmsg(err) || '无法定位本地文件', 'error'))
                                           }}
                                           title="定位文件"
                                         >
@@ -2628,7 +2617,7 @@ export default function App() {
                                               id: track.trackId || `${item.id}-${i}`,
                                               title: track.artistName ? `${track.artistName} - ${track.name}` : track.name,
                                               cover: track.cover || item.cover,
-                                              quality: normalizeCodecLabel(item.quality),
+                                              quality: nrmlcdclbl(item.quality),
                                               status: 'completed',
                                               type: 'track',
                                               trackId: track.trackId,
@@ -2694,7 +2683,7 @@ export default function App() {
               <VStack gap="compact" style={{ marginTop: '16px' }}>
                 <HStack justify="space-between" align="center">
                   <Heading level={3}>历史已下载 ({downloadHistory.length})</Heading>
-                  <Button variant="ghost" size="sm" onClick={() => getHistoryApi().then(res => setDownloadHistory(res))}>刷新</Button>
+                  <Button variant="ghost" size="sm" onClick={() => gthstry().then(res => setDownloadHistory(res))}>刷新</Button>
                 </HStack>
                 {historyAlbumGroups.length === 0 ? (
                   <Text tone="secondary" style={{ fontSize: '0.85rem' }}>暂无历史下载记录</Text>
@@ -2754,7 +2743,7 @@ export default function App() {
                                   variant="ghost"
                                   size={32}
                                   onClick={() => {
-                                    openFolderApi(group.folderPath || firstTrack?.file_path).catch((err) => pushToast('定位失败', err.message || '无法定位本地文件', 'error'))
+                                    opnfldr(group.folderPath || firstTrack?.file_path).catch((err) => pushToast('定位失败', gterrmsg(err) || '无法定位本地文件', 'error'))
                                   }}
                                   title="定位专辑目录"
                                 >
@@ -2772,14 +2761,14 @@ export default function App() {
                                         {index + 1}. {track.name}
                                       </Text>
                                       <HStack gap="compact">
-                                        <Badge tone="success">{normalizeCodecLabel(track.codec)}</Badge>
+                                        <Badge tone="success">{nrmlcdclbl(track.codec)}</Badge>
                                         <IconButton
                                           variant="secondary"
                                           size={26}
                                           onClick={() => {
                                             startLocalPlayback(
                                               track.track_id,
-                                              { name: track.name, artistName: track.artist_name, artworkUrl: track.artwork_url || getLocalArtworkUrl(track.track_id) },
+                                              { name: track.name, artistName: track.artist_name, artworkUrl: track.artwork_url || gtlclart(track.track_id) },
                                               true
                                             )
                                           }}
@@ -2799,7 +2788,7 @@ export default function App() {
                                           variant="ghost"
                                           size={26}
                                           onClick={() => {
-                                            openFolderApi(track.file_path).catch((err) => pushToast('定位失败', err.message || '无法定位本地文件', 'error'))
+                                            opnfldr(track.file_path).catch((err) => pushToast('定位失败', gterrmsg(err) || '无法定位本地文件', 'error'))
                                           }}
                                           title="定位文件"
                                         >
@@ -2810,8 +2799,8 @@ export default function App() {
                                           size={26}
                                           onClick={() => {
                                             if (window.confirm('确定要删除此历史记录吗？将同时尝试删除本地文件。')) {
-                                              deleteHistoryApi(track.track_id, true).then(() => {
-                                                getHistoryApi().then(res => setDownloadHistory(res))
+                                              dlthstry(track.track_id, true).then(() => {
+                                                gthstry().then(res => setDownloadHistory(res))
                                               }).catch(console.error)
                                             }
                                           }}
@@ -3203,7 +3192,7 @@ export default function App() {
                           { label: 'EN', value: 'en' }
                         ]}
                         value={disclaimerLang}
-                        onChange={(val) => setDisclaimerLang(val as any)}
+                        onChange={(val) => setDisclaimerLang(val as 'zh' | 'en')}
                       />
                     </HStack>
                   </HStack>
@@ -3248,7 +3237,7 @@ export default function App() {
                   variant="ghost"
                   size={30}
                   onClick={handleCloseWslInstallDialog}
-                  disabled={Boolean(wslInstallStatusData?.running)}
+                  disabled={wslInstallStatusData?.running}
                   title={wslInstallStatusData?.running ? '安装进行中，暂不可关闭' : '关闭'}
                 >
                   <Icon name="close" size={14} />
@@ -3313,7 +3302,7 @@ export default function App() {
                 <Button
                   variant="secondary"
                   onClick={handleCloseWslInstallDialog}
-                  disabled={Boolean(wslInstallStatusData?.running)}
+                  disabled={wslInstallStatusData?.running}
                 >
                   关闭
                 </Button>
@@ -3322,9 +3311,9 @@ export default function App() {
                   onClick={handleConfirmInstallWsl2}
                   disabled={
                     wslInstallLoading
-                    || Boolean(wslInstallStatusData?.running)
-                    || Boolean(wslInstallPrecheck?.already_installed)
-                    || !Boolean(wslInstallPrecheck?.can_install)
+                    || wslInstallStatusData?.running
+                    || wslInstallPrecheck?.already_installed
+                    || !wslInstallPrecheck?.can_install
                   }
                   leadingIcon={wslInstallLoading ? <Spinner size={14} /> : undefined}
                 >
@@ -3356,7 +3345,7 @@ export default function App() {
                   variant="ghost"
                   size={30}
                   onClick={handleCloseWrapperSetupDialog}
-                  disabled={Boolean(wrapperSetupStatusData?.running)}
+                  disabled={wrapperSetupStatusData?.running}
                   title={wrapperSetupStatusData?.running ? '任务进行中，暂不可关闭' : '关闭'}
                 >
                   <Icon name="close" size={14} />
@@ -3421,7 +3410,7 @@ export default function App() {
                 <Button
                   variant="secondary"
                   onClick={handleCloseWrapperSetupDialog}
-                  disabled={Boolean(wrapperSetupStatusData?.running)}
+                  disabled={wrapperSetupStatusData?.running}
                 >
                   关闭
                 </Button>
@@ -3431,8 +3420,8 @@ export default function App() {
                     onClick={handleRestartWrapperSetup}
                     disabled={
                       wrapperSetupLoading
-                      || Boolean(wrapperSetupStatusData?.running)
-                      || !Boolean(wrapperSetupPrecheck?.can_start)
+                      || wrapperSetupStatusData?.running
+                      || !wrapperSetupPrecheck?.can_start
                     }
                   >
                     重启Wrapper
@@ -3442,8 +3431,8 @@ export default function App() {
                     onClick={handleConfirmStartWrapperSetup}
                     disabled={
                       wrapperSetupLoading
-                      || Boolean(wrapperSetupStatusData?.running)
-                      || !Boolean(wrapperSetupPrecheck?.can_start)
+                      || wrapperSetupStatusData?.running
+                      || !wrapperSetupPrecheck?.can_start
                     }
                     leadingIcon={wrapperSetupLoading ? <Spinner size={14} /> : undefined}
                   >
@@ -3644,7 +3633,7 @@ export default function App() {
                               setInitEnterConfirmOpen(false)
                               setSkipWrapperAutostart(true)
                               localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'true')
-                              saveSettingsApi({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'true' }).catch(console.error)
+                              svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'true' }).catch(console.error)
                               pushToast('已跳过Wrapper配置', '后续可在设置中随时配置与启动', 'info')
                               dismissInitGuide()
                             }}
@@ -3677,7 +3666,7 @@ export default function App() {
             <Box padding="normal" surface border radius="container">
               <HStack gap="normal" align="center">
                 <Image
-                  src={getArtworkUrl(downloadConfirmTrack.attributes.artwork?.url, 120)}
+                  src={gtarturl(downloadConfirmTrack.attributes.artwork?.url, 120)}
                   alt={downloadConfirmTrack.attributes.name}
                   radius={6}
                   style={{ width: '56px', height: '56px' }}
@@ -3720,7 +3709,7 @@ export default function App() {
       {/* Main app bottom bar navigator */}
       <BottomBar
         active={activeTab}
-        onChange={(val: any) => setActiveTab(val)}
+        onChange={(val) => setActiveTab(val as typeof activeTab)}
         items={[
           { value: 'search', label: '搜索', icon: <Icon name="search" size={20} filled={activeTab === 'search'} /> },
           { value: 'download', label: '下载', icon: <Icon name="download" size={20} filled={activeTab === 'download'} />, badge: downloadingCount > 0 ? downloadingCount : undefined },
