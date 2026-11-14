@@ -2,6 +2,7 @@
 import { useEffect, useRef } from '../../head'
 import { Bdg, Btn, IcBtn, Spn } from '../../ui/components'
 import { Bx, HStk, Hdg, Icn, Txt, VStk } from '../../ui/primitives'
+import { stglbl } from '../../app/helpers'
 import type { AppStore } from '../../app/useAppStore'
 
 // WslDialog组件渲染入口
@@ -53,7 +54,7 @@ export function WslDlg({ store }: { store: AppStore }) {
                 </Txt>
                 {wslInstallStatusData?.message && (
                   <Txt tone="secondary" style={{ fontSize: '0.78rem' }}>
-                    当前状态：{wslInstallStatusData.message}（阶段：{wslInstallStatusData.stage || 'idle'}）
+                    当前状态：{wslInstallStatusData.message}（阶段：{stglbl(wslInstallStatusData.stage || 'idle')}）
                   </Txt>
                 )}
                 <HStk gap="compact" style={{ flexWrap: 'wrap' }}>

@@ -175,7 +175,7 @@ export async function prbapllgn(
   if (!istri()) {
     return {
       success: false,
-      message: '当前环境不支持内置登录窗口 Cookie 检测',
+      message: '当前环境不支持内置登录窗口的登录检测',
       cookiesCount: 0,
       hasMediaUserToken: false,
       loginDetected: false,

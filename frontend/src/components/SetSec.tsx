@@ -33,7 +33,7 @@ export function SetSec({
         />
       </button>
       {open && (
-        <div style={{ padding: '16px', borderTop: '1px solid color-mix(in srgb, var(--component-wrapped-bg) 30%, transparent)' }}>
+        <div className="ui-accordion-content" style={{ padding: '16px', borderTop: '1px solid color-mix(in srgb, var(--component-wrapped-bg) 30%, transparent)' }}>
           {children}
         </div>
       )}

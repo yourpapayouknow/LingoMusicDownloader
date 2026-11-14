@@ -213,7 +213,7 @@ export function DwnVw({ store }: { store: AppStore }) {
                                   size={26}
                                   onClick={() => {
                                     if (!track.trackId) {
-                                      pshtst('添加失败', '该曲目缺少 track_id，无法加入播放列表', 'error')
+                                      pshtst('添加失败', '该曲目缺少曲目编号，无法加入播放列表', 'error')
                                       return
                                     }
                                     addlcpl(

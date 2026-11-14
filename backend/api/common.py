@@ -31,7 +31,7 @@ COOKIE_DB_COPY_RETRY_DELAY_SECONDS = 0.35
 COOKIE_INIT_RETRY_ATTEMPTS = 4
 COOKIE_INIT_RETRY_DELAY_SECONDS = 1.1
 
-# WSL2与Wrapper配置常量
+# WSL2与解密组件配置常量
 WSL2_REQUIRED_FREE_GB = 15.0
 WSL2_D_INSTALL_PATH = r"D:\WSL2"
 WSL2_UBUNTU_DISTRO = "Ubuntu"
@@ -184,35 +184,35 @@ def chkprt(host: str, port: int, tmout: float = 1.5) -> bool:
         return False
 
 
-# 读取Wrapper部署状态副本
+# 读取解密组件部署状态副本
 def wrprstcpy() -> Dict[str, Any]:
     return _stcpy(_wrapper_setup_state, _wrapper_setup_state_lock)
 
 
-# 更新Wrapper部署状态
+# 更新解密组件部署状态
 def wrprstset(**kwargs) -> None:
     _stset(_wrapper_setup_state, _wrapper_setup_state_lock, kwargs)
 
 
-# 追加Wrapper部署日志
+# 追加解密组件部署日志
 def wrprstlog(msg: str) -> None:
     _stlog(_wrapper_setup_state, _wrapper_setup_state_lock, WRAPPER_STATE_MAX_LOGS, msg)
 
 
-# 设置全局Wrapper子进程
+# 设置全局解密组件子进程
 def setwrprprc(proc: Optional[subprocess.Popen]) -> None:
     global _wrapper_process
     with _wrapper_process_lock:
         _wrapper_process = proc
 
 
-# 获取全局Wrapper子进程
+# 获取全局解密组件子进程
 def gtwrprprc() -> Optional[subprocess.Popen]:
     with _wrapper_process_lock:
         return _wrapper_process
 
 
-# 获取Wrapper运行健康度状态
+# 获取解密组件运行健康度状态
 def wrprhlth() -> Dict[str, bool]:
     decrypt_ok = chkprt("127.0.0.1", WRAPPER_DECRYPT_PORT, WRAPPER_PORT_CHECK_TIMEOUT_SECONDS)
     m3u8_ok = chkprt("127.0.0.1", WRAPPER_M3U8_PORT, WRAPPER_PORT_CHECK_TIMEOUT_SECONDS)

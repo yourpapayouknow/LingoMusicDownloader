@@ -131,7 +131,7 @@ APPLE_STOREFRONT_ID_MAP = {
     "143479": "sa",
     "143481": "ae",
 }
-# 从Cookies中提取media-user-token
+# 从登录凭据中提取media-user-token
 def _ldmtok(cookies_path: str) -> str:
     cookies = MozillaCookieJar(cookies_path)
     cookies.load(ignore_discard=True, ignore_expires=True)
@@ -211,7 +211,7 @@ async def _ftatkns() -> List[str]:
         return tokens
 
 
-# 从Wrapper地域标识解析Storefront国家代号
+# 从解密组件地域标识解析Storefront国家代号
 def _sfwrpr(value: Any) -> str:
     storefront_id = str(value or "").split(",", 1)[0].split("-", 1)[0].strip()
     return APPLE_STOREFRONT_ID_MAP.get(storefront_id, "cn")
@@ -230,7 +230,7 @@ def _synacinf(storefront: str) -> Dict[str, Any]:
     }
 
 
-# 从本地Wrapper端口获取账户授权信息
+# 从本地解密组件端口获取账户授权信息
 async def _ftwrprac() -> Dict[str, Any]:
     errors: List[str] = []
     async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
@@ -376,7 +376,7 @@ async def _cfpxclt(api: AppleMusicApi) -> None:
         logger.warning("Failed to configure proxy-aware client for AppleMusicApi: %s", e)
 
 
-# 从本地Legacy Wrapper中继提取令牌构建AppleMusicApi
+# 从本地Legacy解密组件中继提取令牌构建AppleMusicApi
 async def _crtamwrp() -> AppleMusicApi:
     wrapper_account_info = await _ftwrprac()
     auth_info = wrapper_account_info.get("auth") if isinstance(wrapper_account_info.get("auth"), dict) else {}
@@ -566,7 +566,7 @@ def _wslprdy(port: int) -> bool:
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
-# 检查WSL Wrapper解密端口是否可用（由Wrapper服务负责启动）
+# 检查WSL解密端口是否可用（由解密组件服务负责启动）
 async def _enswslbr() -> bool:
     ready = await asyncio.to_thread(_wslprdy, 10020)
     if not ready:

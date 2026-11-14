@@ -81,7 +81,7 @@ async def strtdwnld(request: DownloadRequest):
     if normalized_codec in {"alac", "dolby"} and not request.use_wrapper:
         raise HTTPException(
             status_code=400,
-            detail="当前音质需要Wrapper支持。请先启用并确保Wrapper正在运行后重试。",
+            detail="当前音质需要解密组件支持。请先启用并确保解密组件正在运行后重试。",
         )
 
     if request.use_wrapper:
@@ -90,11 +90,11 @@ async def strtdwnld(request: DownloadRequest):
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Wrapper未就绪，已拒绝自动降级下载。"
+                    "解密组件未就绪，已拒绝自动降级下载。"
                     f" 端口状态: decrypt={wrapper_health.get('decrypt_ok')},"
                     f" m3u8={wrapper_health.get('m3u8_ok')},"
                     f" account={wrapper_health.get('account_ok')}。"
-                    " 请在“安装Wrapper并登录”中重启Wrapper后重试。"
+                    " 请在“安装解密组件并登录”中重启解密组件后重试。"
                 ),
             )
 

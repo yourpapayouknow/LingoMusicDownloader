@@ -50,14 +50,14 @@ export function SrchVw({ store }: { store: AppStore }) {
           </HStk>
 
           {/* Recommendation pill Tags */}
-          <HStk gap="compact" style={{ flexWrap: 'wrap', marginTop: '12px' }} align="center">
-            <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>常用搜索：</Txt>
+          <div className="search-chips">
+            <Txt tone="secondary" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>常用搜索：</Txt>
             {(recommendations.length > 0 ? recommendations : searchRecommendations).map((rec) => (
               <Chp key={rec} onClick={() => hdlrcck(rec)}>
                 {rec}
               </Chp>
             ))}
-          </HStk>
+          </div>
         </VStk>
       </Crd>
 

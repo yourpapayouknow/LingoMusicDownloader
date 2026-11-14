@@ -1,4 +1,4 @@
-# 浏览器Cookies提取、DPAPI解密与Netscape文件持久化模块
+# 浏览器登录凭据提取、DPAPI解密与Netscape文件持久化模块
 from backend.head import (
     APIRouter, HTTPException, BaseModel, Optional, List, Dict, Any,
     os, time, json, sqlite3, tempfile, Path, re, base64, shutil, ctypes,
@@ -195,7 +195,7 @@ def tonetscapeln(cookie: Dict[str, Any]) -> str:
     return "\t".join([domain, include_subdomain, path, secure, expiry, name, value])
 
 
-# 格式化完整Netscape Cookies文本
+# 格式化完整Netscape 登录凭据文本
 def srlnckies(cookies: List[Dict[str, Any]]) -> str:
     lines = list(COOKIE_EXPORT_HEADER_LINES)
     lines.extend(tonetscapeln(item) for item in cookies)
@@ -317,7 +317,7 @@ def fndtrckcnd(profile_hint: Optional[str], started_at_ms: Optional[int]) -> Lis
     return [item[2] for item in scored]
 
 
-# 从数据库读取并解密Apple服务Cookies
+# 从数据库读取并解密Apple服务登录凭据
 def rdaplcksdb(cookie_db_path: Path) -> List[Dict[str, Any]]:
     local_state_path = fndlcsttpth(cookie_db_path)
     master_key = ldchrmmstk(local_state_path) if local_state_path else None
@@ -370,7 +370,7 @@ def rdaplcksdb(cookie_db_path: Path) -> List[Dict[str, Any]]:
     return list(dedup.values())
 
 
-# 从WebView导出或检测Apple登录Cookies
+# 从WebView导出或检测Apple登录登录凭据
 def exptaplcks(
     profile_hint: Optional[str],
     started_at_ms: Optional[int],
@@ -380,7 +380,7 @@ def exptaplcks(
     if not candidates:
         return {
             "success": False,
-            "message": "未找到 WebView Cookies 数据库，请先完成登录流程。",
+            "message": "未找到登录窗口的凭据数据库，请先完成登录流程。",
             "cookies_count": 0,
             "has_media_user_token": False,
         }
@@ -417,10 +417,10 @@ def exptaplcks(
     if not all_cookies:
         err_text = read_errors[0] if read_errors else ""
         if "Permission denied" in err_text or "unable to open database file" in err_text:
-            msg = "WebView2 正在独占占用 Cookies 数据库，无法从磁盘直接读取；请等待窗口内自动识别，或重新点击登录并在完成登录后再关闭窗口。"
+            msg = "登录窗口正在占用凭据数据库，无法从磁盘直接读取；请等待窗口内自动识别，或重新点击登录并在完成登录后再关闭窗口。"
         else:
             detail = f" 读取错误：{err_text}" if err_text else ""
-            msg = "检测到 Cookies 数据库，但未提取到可用的 Apple 登录 Cookies。" + detail
+            msg = "检测到凭据数据库，但未提取到可用的Apple登录凭据。" + detail
         return {
             "success": False,
             "message": msg,
@@ -434,7 +434,7 @@ def exptaplcks(
 
     return {
         "success": True,
-        "message": "Cookies 已导出。" if write_to_file else "Cookies 检测完成。",
+        "message": "凭据已导出。" if write_to_file else "凭据检测完成。",
         "cookies_count": len(all_cookies),
         "has_media_user_token": has_token,
         "source_db": str(selected_db) if selected_db else "",
@@ -455,7 +455,7 @@ async def intmngrrtr(
     return False
 
 
-# 保存手动输入的Netscape Cookies端点
+# 保存手动输入的Netscape 登录凭据端点
 @router.post("/cookies")
 async def svcksrtr(request: CookieRequest):
     try:
@@ -498,7 +498,7 @@ async def prbcklgn(request: CookieLoginFinalizeRequest):
     }
 
 
-# 完成WebView登录并导出Cookies端点
+# 完成WebView登录并导出登录凭据端点
 @router.post("/cookie-login/finalize")
 async def fnlcklgn(request: CookieLoginFinalizeRequest):
     try:
@@ -524,9 +524,9 @@ async def fnlcklgn(request: CookieLoginFinalizeRequest):
     has_token = bool(export_result.get("has_media_user_token"))
     success = bool(initialized and has_token)
     message = (
-        "登录成功，Cookies 已导出并完成核心初始化。"
+        "登录成功，凭据已导出并完成核心初始化。"
         if success
-        else "Cookies 已导出，但未检测到完整登录态，请确认 Apple Music 账户已登录。"
+        else "凭据已导出，但未检测到完整登录态，请确认Apple Music账户已登录。"
     )
 
     return {

@@ -255,12 +255,14 @@ type ScrollViewProps = {
 } & ComponentPropsWithoutRef<'div'>
 
 export function ScrVw({ children, className, style, height, ...props }: ScrollViewProps) {
+  const resolvedHeight = typeof height === 'number' ? `${height}px` : height
   return (
     <div
       className={cx('ui-scrollview', className)}
       style={{
         ...style,
-        maxHeight: typeof height === 'number' ? `${height}px` : height,
+        height: resolvedHeight,
+        maxHeight: resolvedHeight,
       }}
       {...props}
     >

@@ -390,7 +390,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
         logger.debug("get_song_stream_info success: %s", stream_info_av)
         return stream_info_av
 
-    # 获取Wrapper解密流m3u8地址
+    # 获取解密组件解密流m3u8地址
     async def get_wrapper_m3u8(self, adam_id: str) -> str | None:
         wrapper_url = await super().get_wrapper_m3u8(adam_id)
         if wrapper_url:

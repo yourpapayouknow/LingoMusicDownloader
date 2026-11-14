@@ -7,7 +7,7 @@ import {
   srchapl, sbmtdwnld, gtstts, gthlth, svcks, fnllgn,
   wslprchk, wslstrt, wslstts, wrprprchk, wrprstrt, wrprstts, wrprint,
   gtstngs, svstngs, gthstry, dlthstry, gtrecmdtn, rprtsrch,
-  gtlclurl, gtlclart, gtlcllrc, scnlcl,
+  gtlclurl, gtlclart, gtlcllrc, scnlcl, gtdirs, svdirs, rstdirs,
   type SearchResult, type HealthStatus,
   type Wsl2InstallPrecheckResponse, type Wsl2InstallStatusResponse,
   type WrapperSetupPrecheckResponse, type WrapperSetupStatusResponse,
@@ -92,6 +92,9 @@ export function useStor() {
   const [cookieText, setCookieText] = useState('')
   const [cookieSaving, setCookieSaving] = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [downloadDir, setDownloadDir] = useState('')
+  const [convertedDir, setConvertedDir] = useState('')
+  const [storageSaving, setStorageSaving] = useState(false)
   const [initGuideOpen, setInitGuideOpen] = useState(() => {
     return localStorage.getItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED) !== 'true'
   })
@@ -363,13 +366,13 @@ export function useStor() {
           const saveResult = await svcks(content)
           result = {
             success: Boolean(saveResult.success),
-            message: saveResult.message || 'Cookies已保存并完成初始化',
+            message: saveResult.message || '登录凭据已保存并完成初始化',
             cookies_count: liveCookieCount || content.split('\n').filter((line) => line.trim() && !line.startsWith('#')).length,
           }
         } else if (observedPreLoginCookies) {
           result = {
             success: false,
-            message: '未检测到完整Apple Music登录态（缺少 media-user-token），请先在弹窗内完成账号登录再关闭。',
+            message: '未检测到完整登录态（缺少登录令牌），请先在弹窗内完成账号登录再关闭。',
             cookies_count: 0,
           }
         } else {
@@ -393,14 +396,14 @@ export function useStor() {
         }
 
         if (result.success) {
-          pshtst('登录成功', result.message || 'Cookies导出并初始化成功', 'success')
+          pshtst('登录成功', result.message || '登录凭据导出并初始化成功', 'success')
           apndlog(`[授权系统] 已自动导出并加载Apple Music Cookies (${result.cookies_count} 条)。`)
         } else {
           pshtst('登录未完成', result.message || '未检测到有效登录态', 'error')
         }
       } catch (err) {
         console.error(err)
-        pshtst('登录校验失败', gterrmsg(err) || '无法导出登录Cookies', 'error')
+        pshtst('登录校验失败', gterrmsg(err) || '无法导出登录凭据', 'error')
       } finally {
         setInitCookieLoggingIn(false)
       }
@@ -417,7 +420,7 @@ export function useStor() {
         if (probe.loginDetected && probe.cookiesContent?.trim()) {
           liveCookieContent = probe.cookiesContent
           liveCookieCount = probe.cookiesCount || liveCookieCount
-          pshtst('检测到登录', '已识别Apple登录态，正在自动关闭窗口并完成校验...', 'success')
+          pshtst('检测到登录', '已识别登录态，正在自动关闭窗口并完成校验...', 'success')
           try {
             await loginWindowSession?.close()
             window.setTimeout(() => {
@@ -437,7 +440,7 @@ export function useStor() {
 
     if (!istri()) {
       window.open('https://music.apple.com/cn/new', '_blank', 'noopener,noreferrer')
-      pshtst('已打开网页', '请完成登录后手动导出Cookies（当前为浏览器模式）', 'info')
+      pshtst('已打开网页', '请完成登录后手动导出登录凭据（当前为浏览器模式）', 'info')
       return
     }
 
@@ -657,7 +660,7 @@ export function useStor() {
           setSkipWrapperAutostart(false)
           localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
           svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
-          pshtst('Wrapper已就绪', status.message || 'Wrapper正在运行', 'success')
+          pshtst('解密组件已就绪', status.message || '解密组件正在运行', 'success')
           try {
             const [statusData, health] = await Promise.all([gtstts(), gthlth()])
             setDownloaderInitialized(statusData.is_initialized)
@@ -670,7 +673,7 @@ export function useStor() {
             setWrapperSetupDialogOpen(false)
           }, 800)
         } else {
-          pshtst('Wrapper流程失败', status.message || '请查看日志并重试', 'error')
+          pshtst('解密组件流程失败', status.message || '请查看日志并重试', 'error')
         }
       }
     }
@@ -700,7 +703,7 @@ export function useStor() {
       }
     } catch (err) {
       console.error(err)
-      pshtst('检查失败', gterrmsg(err) || '无法获取Wrapper状态', 'error')
+      pshtst('检查失败', gterrmsg(err) || '无法获取解密组件状态', 'error')
     } finally {
       setWrapperSetupLoading(false)
     }
@@ -716,7 +719,7 @@ export function useStor() {
       const startRes = await wrprstrt({ force_restart: forceRestart })
       if (!startRes.success) {
         if (!isSilent) {
-          pshtst(forceRestart ? '无法重启' : '无法启动', startRes.message || 'Wrapper启动前检查未通过', 'error')
+          pshtst(forceRestart ? '无法重启' : '无法启动', startRes.message || '解密组件启动前检查未通过', 'error')
         }
         setWrapperSetupLoading(false)
         return false
@@ -735,7 +738,7 @@ export function useStor() {
     } catch (err) {
       console.error(err)
       if (!isSilent) {
-        pshtst(forceRestart ? '重启失败' : '启动失败', gterrmsg(err) || '无法启动Wrapper流程', 'error')
+        pshtst(forceRestart ? '重启失败' : '启动失败', gterrmsg(err) || '无法启动解密组件流程', 'error')
       }
       setWrapperSetupLoading(false)
       return false
@@ -747,7 +750,7 @@ export function useStor() {
     await trgwrps(false, false)
   }, [trgwrps])
 
-  // 确认重启Wrapper服务
+  // 确认重启解密组件服务
   const hdlrsws = useCallback(async () => {
     await trgwrps(true, false)
   }, [trgwrps])
@@ -791,7 +794,7 @@ export function useStor() {
       } else {
         const code = wrapperInput2fa.trim()
         if (!code) {
-          pshtst('输入不完整', '请输入2FA验证码', 'error')
+          pshtst('输入不完整', '请输入两步验证码', 'error')
           setWrapperInputSubmitting(false)
           return
         }
@@ -801,7 +804,7 @@ export function useStor() {
           code,
         })
         if (!res.success) {
-          pshtst('提交失败', res.message || '2FA验证码提交失败', 'error')
+          pshtst('提交失败', res.message || '两步验证码提交失败', 'error')
           setWrapperInputSubmitting(false)
           return
         }
@@ -816,7 +819,7 @@ export function useStor() {
       }, 1100)
     } catch (err) {
       console.error(err)
-      pshtst('提交失败', gterrmsg(err) || '无法提交Wrapper输入', 'error')
+      pshtst('提交失败', gterrmsg(err) || '无法提交解密组件输入', 'error')
     } finally {
       setWrapperInputSubmitting(false)
     }
@@ -1132,6 +1135,12 @@ export function useStor() {
     // Fetch History
     gthstry().then(res => {
       setDownloadHistory(res)
+    }).catch(console.error)
+
+    // Fetch Storage Paths
+    gtdirs().then(res => {
+      setDownloadDir(res.download_dir)
+      setConvertedDir(res.converted_dir)
     }).catch(console.error)
 
     // Poll every 3 seconds
@@ -1572,7 +1581,7 @@ export function useStor() {
   const pllcltr = (item: QueueItem) => {
     const trackId = item.trackId || item.id
     if (!trackId || trackId === 'Unknown') {
-      pshtst('播放失败', '该下载项缺少曲目ID，暂时无法本地播放', 'error')
+      pshtst('播放失败', '该下载项缺少曲目编号，暂时无法本地播放', 'error')
       return
     }
     const trackName = item.trackName || item.title
@@ -1587,7 +1596,7 @@ export function useStor() {
     setCurrentPlaylistKey(entry.key)
     if (entry.source === 'local') {
       if (!entry.trackId) {
-        pshtst('播放失败', '播放列表中的本地曲目缺少 track_id', 'error')
+        pshtst('播放失败', '播放列表中的本地曲目缺少曲目编号', 'error')
         return
       }
       stlclpl(
@@ -1649,7 +1658,7 @@ export function useStor() {
   const hdladqp = useCallback((item: QueueItem) => {
     const trackId = item.trackId || item.id
     if (!trackId || trackId === 'Unknown') {
-      pshtst('添加失败', '该本地曲目缺少 track_id，无法加入播放列表', 'error')
+      pshtst('添加失败', '该本地曲目缺少曲目编号，无法加入播放列表', 'error')
       return
     }
 
@@ -1672,6 +1681,42 @@ export function useStor() {
     pshtst('已添加', `已加入播放列表：${track.name}`, 'success')
   }, [addlcpl, pshtst])
 
+  // 保存下载与转换目录
+  const svstordirs = useCallback(async () => {
+    const dl = downloadDir.trim()
+    const cv = convertedDir.trim()
+    if (!dl || !cv) {
+      pshtst('保存失败', '下载目录与转换目录不能为空', 'error')
+      return
+    }
+    setStorageSaving(true)
+    try {
+      const res = await svdirs(dl, cv)
+      setDownloadDir(res.download_dir)
+      setConvertedDir(res.converted_dir)
+      pshtst('保存成功', '存储位置已更新，仅影响后续下载与转码', 'success')
+    } catch (err) {
+      pshtst('保存失败', gterrmsg(err) || '无法保存存储位置', 'error')
+    } finally {
+      setStorageSaving(false)
+    }
+  }, [downloadDir, convertedDir, pshtst])
+
+  // 恢复默认下载与转换目录
+  const rststordirs = useCallback(async () => {
+    setStorageSaving(true)
+    try {
+      const res = await rstdirs()
+      setDownloadDir(res.download_dir)
+      setConvertedDir(res.converted_dir)
+      pshtst('已恢复默认', '下载与转换目录已恢复默认位置', 'success')
+    } catch (err) {
+      pshtst('恢复失败', gterrmsg(err) || '无法恢复默认存储位置', 'error')
+    } finally {
+      setStorageSaving(false)
+    }
+  }, [pshtst])
+
   // Save cookies action
   const trgsvck = async () => {
     if (!cookieText.trim()) return
@@ -1679,13 +1724,13 @@ export function useStor() {
     try {
       const res = await svcks(cookieText)
       if (res.success) {
-        pshtst('授权成功', 'Cookies配置更新并重载成功！', 'success')
+        pshtst('授权成功', '登录凭据更新并重载成功！', 'success')
         setCookieText('')
         ftsthlth()
         
-        apndlog(`[授权系统] Cookies文件加载成功，重置曲库连接。`)
+        apndlog(`[授权系统] 登录凭据文件加载成功，重置曲库连接。`)
       } else {
-        pshtst('解析失败', res.message || '格式解析异常，请检查Cookies txt', 'error')
+        pshtst('解析失败', res.message || '格式解析异常，请检查Cookies.txt', 'error')
       }
     } catch (err) {
       console.error(err)
@@ -2020,6 +2065,13 @@ export function useStor() {
     dlhsttrk,
     rfrhst,
     setwrpenb,
+    downloadDir,
+    convertedDir,
+    setDownloadDir,
+    setConvertedDir,
+    storageSaving,
+    svstordirs,
+    rststordirs,
     wslInstallStatusData,
   }
 }

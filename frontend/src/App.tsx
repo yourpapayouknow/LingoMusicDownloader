@@ -34,7 +34,7 @@ export default function App() {
       <LyrPnl store={store} />
       <PlsPnl store={store} />
 
-      <ScrVw className="app-main" height="calc(100vh - 150px)">
+      <ScrVw className="app-main">
         <VStk gap="loose" className="app-sections">
           {store.activeTab === 'search' && <SrchVw store={store} />}
           {store.activeTab === 'download' && <DwnVw store={store} />}

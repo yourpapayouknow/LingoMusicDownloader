@@ -58,10 +58,10 @@ export function DwnDlg({ store }: { store: AppStore }) {
             <Txt style={{ fontSize: '0.86rem' }}>预计下载品质：</Txt>
             <Bdg tone="success">
               {downloadConfirmTrack.type === 'music-videos'
-                ? (resolution === '4k' ? '4K Ultra HD 级画质' : '1080p Full HD 高清视频')
+                ? (resolution === '4k' ? '4K超高清画质' : '1080p高清视频')
                 : (useWrapper 
-                    ? (codec === 'atmos' ? 'Dolby Atmos (杜比环绕音效)' : 'ALAC 24-bit/192kHz 无损母带')
-                    : 'AAC 256kbps 标准音质'
+                    ? (codec === 'atmos' ? '杜比全景声' : 'ALAC无损母带（24-bit/192kHz）')
+                    : 'AAC标准音质（256kbps）'
                   )
               }
             </Bdg>
@@ -70,7 +70,7 @@ export function DwnDlg({ store }: { store: AppStore }) {
           {blocked && (
             <HStk justify="space-between" align="center" gap="compact">
               <Txt tone="error" style={{ fontSize: '0.8rem' }}>
-                {wrapperBlocked ? 'Wrapper未就绪，请先在设置中启动' : '当前音质需要Wrapper，请先启用高品音质下载'}
+                {wrapperBlocked ? '解密组件未就绪，请先在设置中启动' : '当前音质需要解密组件，请先启用高品音质下载'}
               </Txt>
               <Btn
                 variant="secondary"

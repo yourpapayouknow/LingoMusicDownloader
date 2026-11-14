@@ -32,18 +32,25 @@ body {
 }
 
 .app-shell {
+  height: 100vh;
   min-height: 100vh;
   position: relative;
-  padding-bottom: 90px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .app-main {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: calc(var(--padding-loose) * 1.2);
 }
 
 .app-sections {
   width: min(1100px, 100%);
   margin-inline: auto;
+  /* 为悬浮底栏预留滚动空间，最后一张卡片可滚到栏上方 */
+  padding-bottom: 110px;
 }
 
 .app-sections > * {
@@ -791,6 +798,55 @@ body {
     transform var(--transition-normal),
     box-shadow var(--transition-normal),
     background-color var(--transition-normal);
+}
+
+/* 标签类元素不换行，避免被 flex 压缩后断行 */
+.ui-button,
+.ui-chip,
+.ui-badge,
+.ui-segmented-item,
+.ui-bottombar-item,
+.ui-toggle-label,
+.ui-field-label,
+.ui-tab,
+.ui-accordion-summary .ui-text {
+  white-space: nowrap;
+}
+
+.ui-button,
+.ui-chip,
+.ui-badge,
+.ui-segmented-item,
+.ui-toggle-label {
+  flex-shrink: 0;
+}
+
+.ui-chip {
+  flex: 0 0 auto;
+}
+
+.ui-bottombar-item span {
+  white-space: nowrap;
+}
+
+/* 常用搜索标签横向滚动容器 */
+.search-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--padding-compact);
+  margin-top: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+
+.search-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.search-chips > * {
+  flex: 0 0 auto;
 }
 
 .ui-bottombar-item {

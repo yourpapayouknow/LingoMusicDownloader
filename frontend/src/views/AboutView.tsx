@@ -19,7 +19,7 @@ export function AbtVw({ store }: { store: AppStore }) {
           <img src={logoImage} alt="Product Logo" style={{ width: '72px', height: '72px' }} />
           <VStk align="center" gap={4}>
             <Hdg level={3}>LingoMusic Downloader</Hdg>
-            <Txt tone="secondary" style={{ fontSize: '0.88rem' }}>版本号: v{__APP_VERSION__} (Vite+React+Tauri)</Txt>
+            <Txt tone="secondary" style={{ fontSize: '0.88rem' }}>版本号：{__APP_VERSION__} (Vite+React+Tauri)</Txt>
           </VStk>
           <Txt style={{ fontSize: '0.88rem', textAlign: 'center', maxWidth: '480px', lineHeight: '1.5' }}>
             本应用是一个极速高保真的本地音视频抓取客户端，支持全自动高级品质音频解密与智能封面歌词合成封装。
@@ -44,11 +44,11 @@ export function AbtVw({ store }: { store: AppStore }) {
         <HStk justify="space-between" align="center">
           <VStk gap={2}>
             <Txt weight={700}>开发作者</Txt>
-            <Txt tone="secondary" style={{ fontSize: '0.84rem' }}>yourpapayouknow (GitHub 社区)</Txt>
+            <Txt tone="secondary" style={{ fontSize: '0.84rem' }}>yourpapayouknow（GitHub社区）</Txt>
           </VStk>
           <IcBtn
             variant="ghost"
-            onClick={() => opnext(repositoryUrl, 'GitHub 仓库')}
+            onClick={() => opnext(repositoryUrl, 'GitHub仓库')}
             title="作者仓库"
           >
             <Icn name="github" size={20} />
@@ -65,7 +65,7 @@ export function AbtVw({ store }: { store: AppStore }) {
               { name: 'Tauri Framework', desc: '轻量级桌面容器核心', url: 'https://github.com/tauri-apps/tauri' },
               { name: 'Vite Build Engine', desc: '下一代前端构建调度器', url: 'https://github.com/vitejs/vite' },
               { name: 'React UI Runtime', desc: '高性能状态组件库', url: 'https://github.com/facebook/react' },
-              { name: 'FastAPI Backend', desc: '极速异步 Python API 框架', url: 'https://github.com/tiangolo/fastapi' },
+              { name: 'FastAPI Backend', desc: '极速异步后端框架', url: 'https://github.com/tiangolo/fastapi' },
               { name: 'gamdl Downloader', desc: '核心曲目调度抓取模块', url: 'https://github.com/glomatico/gamdl' }
             ].map((lib, i) => (
               <Bx key={i} padding="compact">
@@ -102,7 +102,7 @@ export function AbtVw({ store }: { store: AppStore }) {
               <Txt weight={700} tone="error">使用免责声明及法律风险提示</Txt>
             </HStk>
             <HStk gap="compact" align="center">
-              <Txt style={{ fontSize: '0.78rem' }} tone="secondary">语言/Language:</Txt>
+              <Txt style={{ fontSize: '0.78rem' }} tone="secondary">语言</Txt>
               <Seg
                 options={[
                   { label: '中文', value: 'zh' },

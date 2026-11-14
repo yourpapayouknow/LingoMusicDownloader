@@ -78,6 +78,14 @@ export interface CookieLoginFinalizeResponse {
 }
 
 
+export interface StoragePathsResponse {
+  success: boolean
+  download_dir: string
+  converted_dir: string
+  default_download_dir?: string
+  default_converted_dir?: string
+}
+
 export interface HistoryItem {
   id: number
   track_id: string
@@ -282,6 +290,28 @@ export async function gtstngs(): Promise<Record<string, unknown>> {
 // 更新客户端设置配置项
 export async function svstngs(settings: Record<string, unknown>): Promise<unknown> {
   return postjson<unknown>(`${BASE_URL}/settings`, settings, 'Failed to save settings')
+}
+
+
+// 获取下载与转换目录路径
+export async function gtdirs(): Promise<StoragePathsResponse> {
+  return reqjson<StoragePathsResponse>(`${BASE_URL}/storage/paths`, undefined, 'Failed to fetch storage paths')
+}
+
+
+// 保存下载与转换目录路径
+export async function svdirs(downloadDir: string, convertedDir: string): Promise<StoragePathsResponse> {
+  return postjson<StoragePathsResponse>(
+    `${BASE_URL}/storage/paths`,
+    { download_dir: downloadDir, converted_dir: convertedDir },
+    'Failed to save storage paths'
+  )
+}
+
+
+// 恢复默认下载与转换目录
+export async function rstdirs(): Promise<StoragePathsResponse> {
+  return postjson<StoragePathsResponse>(`${BASE_URL}/storage/paths/reset`, undefined, 'Failed to reset storage paths')
 }
 
 

@@ -1,7 +1,7 @@
 // 设置页视图
 import { METADATA_REGION_PRESETS } from '../app/constants'
 import { SetSec } from '../components/SetSec'
-import { Bdg, Btn, Mnu, Spn, TxAr, Tgl } from '../ui/components'
+import { Bdg, Btn, Mnu, Spn, TxAr, TxFld, Tgl } from '../ui/components'
 import { Bx, Dvd, Grd, HStk, Icn, Txt, VStk } from '../ui/primitives'
 import type { AppStore } from '../app/useAppStore'
 
@@ -16,6 +16,7 @@ export function SetVw({ store }: { store: AppStore }) {
     transcodeAacToAacStandard, transcodeAacToMp3_320, transcodeAacToMp4, transcodeAlacToFlac,
     transcodeAlacToMp4, transcodeAlacToWav, trgsvck, useWrapper,
     opnwsld, opnwrpd, wslInstallStatusData, wrapperSetupStatusData,
+    downloadDir, convertedDir, setDownloadDir, setConvertedDir, storageSaving, svstordirs, rststordirs,
   } = store
 
   return (
@@ -24,9 +25,9 @@ export function SetVw({ store }: { store: AppStore }) {
         <Grd minItemWidth="240px" gap="normal">
           <Bx padding="normal">
             <VStk gap={4}>
-              <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>授权文件Cookies.txt</Txt>
+              <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>授权文件</Txt>
               <HStk justify="space-between" align="center" style={{ marginTop: '4px' }}>
-                <Txt weight={700}>{healthStatus?.cookies_ok ? '有效配置' : '未授权 (请贴Cookies)'}</Txt>
+                <Txt weight={700}>{healthStatus?.cookies_ok ? '有效配置' : '未授权（请粘贴登录凭据）'}</Txt>
                 <Bdg tone={healthStatus?.cookies_ok ? 'success' : 'error'}>
                   {healthStatus?.cookies_ok ? '正常' : '异常'}
                 </Bdg>
@@ -35,7 +36,7 @@ export function SetVw({ store }: { store: AppStore }) {
           </Bx>
           <Bx padding="normal">
             <VStk gap={4}>
-              <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>解密辅助代理 (Wrapper)</Txt>
+              <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>解密辅助代理</Txt>
               <HStk justify="space-between" align="center" style={{ marginTop: '4px' }}>
                 <Txt weight={700}>{healthStatus?.wrapper.all_ok ? '解密容器就绪' : '组件未工作'}</Txt>
                 <Bdg tone={healthStatus?.wrapper.all_ok ? 'success' : 'error'}>
@@ -92,7 +93,7 @@ export function SetVw({ store }: { store: AppStore }) {
               安装WSL2
             </Btn>
             <Btn variant="secondary" size="sm" onClick={() => void opnwrpd()}>
-              安装Wrapper
+              安装解密组件
             </Btn>
             {(wslInstallStatusData?.running || wrapperSetupStatusData?.running || wrapperSetupStatusData?.awaiting_input) && (
               <Btn
@@ -113,7 +114,7 @@ export function SetVw({ store }: { store: AppStore }) {
       <SetSec
         id="onboarding"
         title="初始化页面入口"
-        hint="重新查看协议、Cookies登录或Wrapper初始化引导"
+        hint="重新查看协议、登录或解密组件初始化引导"
         open={accordionOpen.onboarding}
         onToggle={tglacd}
       >
@@ -136,7 +137,7 @@ export function SetVw({ store }: { store: AppStore }) {
       <SetSec
         id="quality"
         title="音频品质选择"
-        hint="高品音质需要Wrapper就绪；未就绪时提交下载会直接报错"
+        hint="高品音质需要解密组件就绪；未就绪时提交下载会直接报错"
         open={accordionOpen.quality}
         onToggle={tglacd}
       >
@@ -147,7 +148,7 @@ export function SetVw({ store }: { store: AppStore }) {
               checked={useWrapper}
               onChange={(e) => setwrpenb(e.target.checked)}
               disabled={healthStatus ? !healthStatus.wrapper.all_ok : true}
-              title="若Wrapper未就绪，提交下载时将直接报错，不再自动降级"
+              title="若解密组件未就绪，提交下载时将直接报错，不再自动降级"
             />
           </HStk>
 
@@ -159,9 +160,9 @@ export function SetVw({ store }: { store: AppStore }) {
             value={codec}
             onChange={(e) => setCodec(e.target.value)}
             options={[
-              { label: 'AAC 256kbps (标准立体声)', value: 'aac-legacy' },
-              { label: 'ALAC 24-bit/192kHz (高保真无损品质)', value: 'alac' },
-              { label: 'Dolby Atmos (杜比全景声 环绕声)', value: 'atmos' }
+              { label: 'AAC标准音质（256kbps）', value: 'aac-legacy' },
+              { label: 'ALAC无损音质（24-bit/192kHz）', value: 'alac' },
+              { label: '杜比全景声', value: 'atmos' }
             ]}
           />
 
@@ -173,8 +174,8 @@ export function SetVw({ store }: { store: AppStore }) {
             value={resolution}
             onChange={(e) => setResolution(e.target.value)}
             options={healthStatus?.wrapper.all_ok ? [
-              { label: '1080p FHD (自适应高画质)', value: '1080p' },
-              { label: '4K Ultra HD (极高清品质)', value: '4k' }
+              { label: '1080p高清（自适应）', value: '1080p' },
+              { label: '4K超高清', value: '4k' }
             ] : [
               { label: '不可用 (请开启本地解密辅助代理)', value: 'unavailable' }
             ]}
@@ -206,34 +207,34 @@ export function SetVw({ store }: { store: AppStore }) {
             </Txt>
 
             <HStk justify="space-between" align="center">
-              <Txt style={{ fontSize: '0.84rem' }}>AAC自动转换320kMP3</Txt>
+              <Txt style={{ fontSize: '0.84rem' }}>AAC转MP3（320k）</Txt>
               <Tgl checked={transcodeAacToMp3_320} onChange={(e) => setTranscodeAacToMp3_320(e.target.checked)} />
             </HStk>
             <HStk justify="space-between" align="center">
-              <Txt style={{ fontSize: '0.84rem' }}>AAC自动转换MP4</Txt>
+              <Txt style={{ fontSize: '0.84rem' }}>AAC转MP4</Txt>
               <Tgl checked={transcodeAacToMp4} onChange={(e) => setTranscodeAacToMp4(e.target.checked)} />
             </HStk>
             <HStk justify="space-between" align="center">
-              <Txt style={{ fontSize: '0.84rem' }}>AAC自动转换标准AAC</Txt>
+              <Txt style={{ fontSize: '0.84rem' }}>AAC转标准AAC</Txt>
               <Tgl checked={transcodeAacToAacStandard} onChange={(e) => setTranscodeAacToAacStandard(e.target.checked)} />
             </HStk>
             <HStk justify="space-between" align="center">
-              <Txt style={{ fontSize: '0.84rem' }}>ALAC自动转换FLAC</Txt>
+              <Txt style={{ fontSize: '0.84rem' }}>ALAC转FLAC</Txt>
               <Tgl checked={transcodeAlacToFlac} onChange={(e) => setTranscodeAlacToFlac(e.target.checked)} />
             </HStk>
             <HStk justify="space-between" align="center">
-              <Txt style={{ fontSize: '0.84rem' }}>ALAC自动转换WAV</Txt>
+              <Txt style={{ fontSize: '0.84rem' }}>ALAC转WAV</Txt>
               <Tgl checked={transcodeAlacToWav} onChange={(e) => setTranscodeAlacToWav(e.target.checked)} />
             </HStk>
             <HStk justify="space-between" align="center">
-              <Txt style={{ fontSize: '0.84rem' }}>ALAC自动转换MP4</Txt>
+              <Txt style={{ fontSize: '0.84rem' }}>ALAC转MP4</Txt>
               <Tgl checked={transcodeAlacToMp4} onChange={(e) => setTranscodeAlacToMp4(e.target.checked)} />
             </HStk>
           </VStk>
         </VStk>
       </SetSec>
 
-      <SetSec id="cookie" title="Cookies授权管理" open={accordionOpen.cookie} onToggle={tglacd}>
+      <SetSec id="cookie" title="登录授权管理" open={accordionOpen.cookie} onToggle={tglacd}>
         <VStk gap="normal">
           <TxAr
             placeholder="在此粘贴您的账户Cookies (Netscape 文本格式，首行应为 # Netscape HTTP Cookie File)..."
@@ -248,6 +249,42 @@ export function SetVw({ store }: { store: AppStore }) {
               leadingIcon={cookieSaving ? <Spn size={14} /> : <Icn name="check" size={14} />}
             >
               {cookieSaving ? '保存核心中...' : '保存并重启下载核心'}
+            </Btn>
+          </HStk>
+        </VStk>
+      </SetSec>
+
+      <SetSec
+        id="storage"
+        title="存储位置"
+        hint="仅影响后续下载与转码输出，不会移动已有文件"
+        open={accordionOpen.storage}
+        onToggle={tglacd}
+      >
+        <VStk gap="normal">
+          <TxFld
+            label="下载文件夹"
+            value={downloadDir}
+            onChange={(e) => setDownloadDir(e.target.value)}
+            placeholder="例如 D:\\Music"
+          />
+          <TxFld
+            label="转换文件夹"
+            value={convertedDir}
+            onChange={(e) => setConvertedDir(e.target.value)}
+            placeholder="例如 D:\\Music\\Converted"
+          />
+          <HStk justify="flex-end" gap="compact">
+            <Btn variant="secondary" size="sm" onClick={() => void rststordirs()} disabled={storageSaving}>
+              恢复默认
+            </Btn>
+            <Btn
+              size="sm"
+              onClick={() => void svstordirs()}
+              disabled={storageSaving}
+              leadingIcon={storageSaving ? <Spn size={14} /> : undefined}
+            >
+              {storageSaving ? '保存中...' : '保存路径'}
             </Btn>
           </HStk>
         </VStk>

@@ -4,6 +4,7 @@ import { INIT_AGREEMENT_PARAGRAPHS, SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART } from '
 import { Bdg, Btn, IcBtn, Spn, TxFld } from '../../ui/components'
 import { Bx, HStk, Hdg, Icn, Txt, VStk } from '../../ui/primitives'
 import { svstngs } from '../../utils/api'
+import { stglbl } from '../../app/helpers'
 import type { AppStore } from '../../app/useAppStore'
 
 // WrapperDialog组件渲染入口
@@ -35,14 +36,14 @@ export function WrpDlg({ store }: { store: AppStore }) {
     <>
       {/* Wrapper installer/login dialog */}
       {wrapperSetupDialogOpen && (
-        <div className="wsl-install-mask" role="dialog" aria-modal="true" aria-label="安装Wrapper并登录">
+        <div className="wsl-install-mask" role="dialog" aria-modal="true" aria-label="安装解密组件并登录">
           <div className="wsl-install-card" ref={wrpRef} tabIndex={-1} style={{ outline: 'none' }}>
             <VStk gap="normal" style={{ height: '100%' }}>
               <HStk justify="space-between" align="flex-start">
                 <VStk gap={4}>
-                  <Hdg level={3}>安装Wrapper并登录</Hdg>
+                  <Hdg level={3}>安装解密组件并登录</Hdg>
                   <Txt tone="secondary" style={{ fontSize: '0.82rem', lineHeight: '1.5' }}>
-                    将自动检测WSL2、安装/启动Wrapper，并在需要时提示输入ID/密码与2FA验证码
+                    将自动检测WSL2、安装/启动解密组件，并在需要时提示输入账号/密码与两步验证码
                   </Txt>
                 </VStk>
                 <IcBtn
@@ -58,11 +59,11 @@ export function WrpDlg({ store }: { store: AppStore }) {
               <Bx surface border radius="container" padding="normal">
                 <VStk gap={6}>
                   <Txt style={{ fontSize: '0.82rem' }}>
-                    预检查结果：{wrapperSetupPrecheck?.message || '正在检查WSL2与Wrapper运行条件...'}
+                    预检查结果：{wrapperSetupPrecheck?.message || '正在检查WSL2与解密组件运行条件...'}
                   </Txt>
                   {wrapperSetupStatusData?.message && (
                     <Txt tone="secondary" style={{ fontSize: '0.78rem' }}>
-                      当前状态：{wrapperSetupStatusData.message}（阶段：{wrapperSetupStatusData.stage || 'idle'}）
+                      当前状态：{wrapperSetupStatusData.message}（阶段：{stglbl(wrapperSetupStatusData.stage || 'idle')}）
                     </Txt>
                   )}
                   <HStk gap="compact" style={{ flexWrap: 'wrap' }}>
@@ -86,7 +87,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                   )}
                   {wrapperSetupStatusData?.awaiting_input && (
                     <Txt tone="secondary" style={{ fontSize: '0.78rem' }}>
-                      输入提示：{wrapperSetupStatusData.input_prompt || '检测到Wrapper需要输入，请在弹窗中提交。'}
+                      输入提示：{wrapperSetupStatusData.input_prompt || '检测到解密组件需要输入，请在弹窗中提交。'}
                     </Txt>
                   )}
                 </VStk>
@@ -104,7 +105,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                 <HStk gap="compact" align="center">
                   <Spn size={14} />
                   <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>
-                    正在处理Wrapper流程，请稍候...
+                    正在处理解密组件流程，请稍候...
                   </Txt>
                 </HStk>
               )}
@@ -123,7 +124,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                       || !wrapperSetupPrecheck?.can_start
                     }
                   >
-                    重启Wrapper
+                    重启解密组件
                   </Btn>
                   <Btn
                     className="init-guide-primary-btn"
@@ -147,10 +148,10 @@ export function WrpDlg({ store }: { store: AppStore }) {
                   <VStk gap="normal">
                     <VStk gap={4}>
                       <Hdg level={4}>
-                        {wrapperSetupStatusData?.input_type === '2fa' ? '输入2FA验证码' : '输入Apple ID登录信息'}
+                        {wrapperSetupStatusData?.input_type === '2fa' ? '输入两步验证码' : '输入Apple ID登录信息'}
                       </Hdg>
                       <Txt tone="secondary" style={{ fontSize: '0.8rem', lineHeight: '1.5' }}>
-                        {wrapperSetupStatusData?.input_prompt || '检测到Wrapper正在等待输入，请完成提交。'}
+                        {wrapperSetupStatusData?.input_prompt || '检测到解密组件正在等待输入，请完成提交。'}
                       </Txt>
                     </VStk>
 
@@ -237,14 +238,14 @@ export function WrpDlg({ store }: { store: AppStore }) {
                 <VStk gap={4}>
                   <Hdg level={3}>软件初始化配置</Hdg>
                   <Txt tone="secondary" style={{ fontSize: '0.82rem' }}>
-                    以下步骤用于激活全部核心功能。Cookies与Wrapper流程均支持自动检测、安装与登录引导。
+                    以下步骤用于激活全部核心功能。登录凭据与解密组件流程均支持自动检测、安装与登录引导。
                   </Txt>
                 </VStk>
 
                 <div className="init-guide-step-block">
-                  <Txt weight={700} style={{ fontSize: '0.95rem' }}>获取Cookies</Txt>
+                  <Txt weight={700} style={{ fontSize: '0.95rem' }}>获取登录凭据</Txt>
                   <Txt tone="secondary" style={{ fontSize: '0.82rem' }}>
-                    使用Cookies登录以激活搜索与AAC下载功能
+                    登录后激活搜索与AAC下载功能
                   </Txt>
                   <HStk align="center" gap="compact" style={{ marginTop: '10px' }}>
                     <Btn
@@ -263,9 +264,9 @@ export function WrpDlg({ store }: { store: AppStore }) {
                 </div>
 
                 <div className="init-guide-step-block">
-                  <Txt weight={700} style={{ fontSize: '0.95rem' }}>安装Wrapper</Txt>
+                  <Txt weight={700} style={{ fontSize: '0.95rem' }}>安装解密组件</Txt>
                   <Txt tone="secondary" style={{ fontSize: '0.82rem' }}>
-                    使用Wrapper以激活ALAC/DOLBY与MV等高级下载功能
+                    启用解密组件以激活ALAC/杜比与MV等高级下载功能
                   </Txt>
                   <HStk align="center" gap="compact" style={{ marginTop: '10px', flexWrap: 'wrap' }}>
                     <Btn
@@ -278,7 +279,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                       className="init-guide-primary-btn"
                       onClick={opnwrpd}
                     >
-                      点击安装Wrapper并登录
+                      点击安装解密组件并登录
                     </Btn>
                     {initWrapperConfigured && (
                       <span className="init-guide-check-ok" title="已配置">
@@ -297,7 +298,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                       2. WSL2将默认安装在D盘并占用15GB左右空间，请提前预留空间。
                     </Txt>
                     <Txt tone="secondary" style={{ fontSize: '0.78rem' }}>
-                      3. Wrapper为独立服务，使用时需要为其再次登录ID。
+                      3. 解密组件为独立服务，使用时需要为其再次登录账号。
                     </Txt>
                   </VStk>
                 </div>
@@ -320,7 +321,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                           <Txt weight={700}>提示</Txt>
                         </HStk>
                         <Txt style={{ fontSize: '0.84rem', lineHeight: '1.6' }}>
-                          未配置Wrapper将无法下载无损等高规格音视频！您可后续在设置页配置。
+                          未配置解密组件将无法下载无损等高规格音视频！您可后续在设置页配置。
                         </Txt>
                         <HStk justify="flex-end" gap="compact">
                           <Btn variant="secondary" onClick={() => setInitEnterConfirmOpen(false)}>
@@ -333,7 +334,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                               setSkipWrapperAutostart(true)
                               localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'true')
                               svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'true' }).catch(console.error)
-                              pshtst('已跳过Wrapper配置', '后续可在设置中随时配置与启动', 'info')
+                              pshtst('已跳过解密组件配置', '后续可在设置中随时配置与启动', 'info')
                               dsmsgd()
                             }}
                           >

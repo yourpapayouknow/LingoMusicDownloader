@@ -1,5 +1,5 @@
 # 系统配置与运行环境路径管理模块
-from backend.head import BaseSettings, os, sys
+from backend.head import BaseSettings, os, sys, json
 
 
 class Settings(BaseSettings):
@@ -24,13 +24,26 @@ class Settings(BaseSettings):
     def ckspth(self) -> str:
         return os.path.join(self.bsdir(), "cookies.txt")
 
+    # 读取存储路径覆盖配置
+    def _ovrpath(self, key: str, default: str) -> str:
+        try:
+            cfg_path = os.path.join(self.bsdir(), "data", "storage_paths.json")
+            with open(cfg_path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            value = str(payload.get(key) or "").strip()
+            if value:
+                return value
+        except Exception:
+            pass
+        return default
+
     # 获取下载输出目录
     def outpth(self) -> str:
-        return os.path.join(self.bsdir(), "Apple Music")
+        return self._ovrpath("download_dir", os.path.join(self.bsdir(), "Apple Music"))
 
     # 获取转换输出目录
     def cnvtpth(self) -> str:
-        return os.path.join(self.bsdir(), "Converted")
+        return self._ovrpath("converted_dir", os.path.join(self.bsdir(), "Converted"))
 
     # 获取二进制工具目录
     def bindir(self) -> str:

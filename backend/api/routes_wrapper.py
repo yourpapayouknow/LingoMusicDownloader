@@ -1,4 +1,4 @@
-# Wrapper服务部署、解压、进程生命周期与交互认证管理模块
+# 解密组件服务部署、解压、进程生命周期与交互认证管理模块
 from backend.head import (
     APIRouter, BaseModel, Optional, List, Dict, Any,
     asyncio, os, time, subprocess, threading, Path, re, shlex, shutil, urllib, zipfile, logging
@@ -36,7 +36,7 @@ class WrapperSetupInputRequest(BaseModel):
     code: Optional[str] = None
 
 
-# 解析Wrapper运行目录绝对路径
+# 解析解密组件运行目录绝对路径
 def rslvwrprdir() -> Path:
     candidates = [
         Path(settings.bsdir()) / "backend" / "wsl_wrapper",
@@ -49,12 +49,12 @@ def rslvwrprdir() -> Path:
     return candidates[0]
 
 
-# 解析Wrapper二进制可执行文件路径
+# 解析解密组件二进制可执行文件路径
 def rslvwrprbin() -> Path:
     return rslvwrprdir() / "wrapper"
 
 
-# 解析Wrapper账户凭证数据库路径
+# 解析解密组件账户凭证数据库路径
 def rslvwrprdb() -> Path:
     return rslvwrprdir() / WRAPPER_SESSION_DB_RELATIVE_PATH
 
@@ -70,29 +70,29 @@ def wntowslpth(path_obj: Path) -> str:
     return f"/mnt/{drive_letter}/{tail}"
 
 
-# 检查Wrapper可执行文件是否已就绪
+# 检查解密组件可执行文件是否已就绪
 def iswrprinst() -> bool:
     wrapper_binary = rslvwrprbin()
     return wrapper_binary.exists() and wrapper_binary.is_file() and wrapper_binary.stat().st_size > 0
 
 
-# 检查Wrapper核心端口是否处于监听状态
+# 检查解密组件核心端口是否处于监听状态
 def iswrprrun() -> bool:
     return bool(wrprhlth().get("all_ok"))
 
 
-# 停止当前运行的Wrapper服务与外部WSL进程
+# 停止当前运行的解密组件服务与外部WSL进程
 def stpwrprsrv() -> None:
     process = gtwrprprc()
     if process and process.poll() is None:
         try:
             process.terminate()
             process.wait(timeout=5)
-            wrprstlog("已终止当前Wrapper进程。")
+            wrprstlog("已终止当前解密组件进程。")
         except Exception:
             try:
                 process.kill()
-                wrprstlog("已强制结束当前Wrapper进程。")
+                wrprstlog("已强制结束当前解密组件进程。")
             except Exception:
                 pass
     setwrprprc(None)
@@ -116,7 +116,7 @@ def stpwrprsrv() -> None:
         time.sleep(0.3)
 
 
-# 标记Wrapper流程失败状态
+# 标记解密组件流程失败状态
 def mrkwrprfld(msg: str) -> None:
     wrprstlog(msg)
     wrprstset(
@@ -133,7 +133,7 @@ def mrkwrprfld(msg: str) -> None:
     )
 
 
-# 标记Wrapper流程成功就绪状态（成功后清除内存中的账号密码）
+# 标记解密组件流程成功就绪状态（成功后清除内存中的账号密码）
 def mrkwrprscc(msg: str) -> None:
     global _wrapper_cached_credentials
     _wrapper_cached_credentials = None
@@ -216,15 +216,15 @@ def dtctprmptyp(text: str) -> Optional[str]:
 # 根据提示类型请求前端输入或提交缓存凭据
 def hndlprmpt(prompt_type: Optional[str]) -> None:
     if prompt_type == "2fa":
-        rqstwrprint("2fa", "检测到Wrapper需要2FA验证码，请输入验证码后继续。")
+        rqstwrprint("2fa", "检测到解密组件需要两步验证码，请输入验证码后继续。")
     elif prompt_type == "credentials":
         if _wrapper_cached_credentials and sndwrprint(list(_wrapper_cached_credentials))[0]:
             wrprstlog("已通过标准输入提交缓存的账号密码。")
         else:
-            rqstwrprint("credentials", "检测到Wrapper等待Apple ID与密码，请输入后继续。")
+            rqstwrprint("credentials", "检测到解密组件等待账号与密码，请输入后继续。")
 
 
-# 处理Wrapper实时输出文本片段
+# 处理解密组件实时输出文本片段
 def hndlwrprout(text: str) -> None:
     global _wrapper_last_output
     cleaned = (text or "").strip()
@@ -236,7 +236,7 @@ def hndlwrprout(text: str) -> None:
     hndlprmpt(dtctprmptyp(cleaned))
 
 
-# 异步读取Wrapper进程输出日志流
+# 异步读取解密组件进程输出日志流
 def wrproutrdr(process: subprocess.Popen) -> None:
     stream = process.stdout
     if stream is None:
@@ -262,13 +262,13 @@ def wrproutrdr(process: subprocess.Popen) -> None:
             tail = carry[-220:]
             hndlprmpt(dtctprmptyp(tail))
     except Exception as e:
-        wrprstlog(f"读取Wrapper输出流异常: {e}")
+        wrprstlog(f"读取解密组件输出流异常: {e}")
     finally:
         if carry.strip():
             hndlwrprout(carry)
 
 
-# 启动Wrapper输出流监控线程
+# 启动解密组件输出流监控线程
 def strtwrprrdr(process: subprocess.Popen) -> None:
     global _wrapper_reader_thread
     thread = threading.Thread(target=wrproutrdr, args=(process,), daemon=True)
@@ -276,7 +276,7 @@ def strtwrprrdr(process: subprocess.Popen) -> None:
     thread.start()
 
 
-# 下载Wrapper发布包并限制传输大小
+# 下载解密组件发布包并限制传输大小
 def dlmwraprzip(url: str, dest: Path) -> None:
     max_bytes = 300 * 1024 * 1024
     with urllib.request.urlopen(url, timeout=120) as resp, dest.open("wb") as fh:
@@ -287,11 +287,11 @@ def dlmwraprzip(url: str, dest: Path) -> None:
                 break
             total += len(chunk)
             if total > max_bytes:
-                raise ValueError("Wrapper压缩包超过允许的大小上限。")
+                raise ValueError("解密组件压缩包超过允许的大小上限。")
             fh.write(chunk)
 
 
-# 安全解压Wrapper压缩包并拒绝路径穿越
+# 安全解压解密组件压缩包并拒绝路径穿越
 def sfzipxtr(zip_path: Path, dest_dir: Path) -> None:
     dest_resolved = dest_dir.resolve()
     with zipfile.ZipFile(zip_path, "r") as zf:
@@ -306,15 +306,15 @@ def sfzipxtr(zip_path: Path, dest_dir: Path) -> None:
         zf.extractall(dest_resolved)
 
 
-# 确保Wrapper程序已下载并具有执行权限
+# 确保解密组件程序已下载并具有执行权限
 def ensrwrprinst() -> tuple[bool, str]:
     wrapper_dir = rslvwrprdir()
     wrapper_binary = rslvwrprbin()
     wrapper_dir.mkdir(parents=True, exist_ok=True)
 
     if not iswrprinst():
-        wrprstset(stage="download-wrapper", message="正在下载Wrapper组件...")
-        wrprstlog("未检测到本地Wrapper，开始下载。")
+        wrprstset(stage="download-wrapper", message="正在下载解密组件...")
+        wrprstlog("未检测到本地解密组件，开始下载。")
         zip_path = wrapper_dir / "wrapper.zip"
         try:
             dlmwraprzip(WRAPPER_RELEASE_ZIP_URL, zip_path)
@@ -324,7 +324,7 @@ def ensrwrprinst() -> tuple[bool, str]:
         except Exception as e:
             if zip_path.exists():
                 zip_path.unlink(missing_ok=True)
-            return False, f"下载Wrapper失败: {e}"
+            return False, f"下载解密组件失败: {e}"
 
         if not wrapper_binary.exists():
             candidates = [
@@ -335,40 +335,40 @@ def ensrwrprinst() -> tuple[bool, str]:
                 try:
                     shutil.copy2(candidates[0], wrapper_binary)
                 except Exception as e:
-                    return False, f"复制Wrapper二进制文件失败: {e}"
+                    return False, f"复制解密组件二进制文件失败: {e}"
 
         if not wrapper_binary.exists():
             return False, "下载完成但未找到wrapper可执行文件。"
 
-        wrprstlog("Wrapper下载完成。")
+        wrprstlog("解密组件下载完成。")
     else:
-        wrprstlog("检测到本地Wrapper已存在，跳过下载。")
+        wrprstlog("检测到本地解密组件已存在，跳过下载。")
 
     try:
         wrapper_binary_wsl = wntowslpth(wrapper_binary)
     except Exception as e:
-        return False, f"Wrapper路径转换失败: {e}"
+        return False, f"解密组件路径转换失败: {e}"
 
     chmod_cmd = f"chmod +x {shlex.quote(wrapper_binary_wsl)}"
     rc, output = rncptr(["wsl", "-e", "bash", "-lc", chmod_cmd], tmout=20)
     if rc != 0:
         reason = (output or "").strip()
-        return False, f"设置Wrapper执行权限失败: {reason}"
-    wrprstlog("Wrapper执行权限已就绪。")
+        return False, f"设置解密组件执行权限失败: {reason}"
+    wrprstlog("解密组件执行权限已就绪。")
     return True, ""
 
 
-# 启动Wrapper服务子进程（账号密码只经标准输入提交，不进入命令行）
+# 启动解密组件服务子进程（账号密码只经标准输入提交，不进入命令行）
 def lnchwrprprc() -> tuple[Optional[subprocess.Popen], str]:
     wrapper_dir = rslvwrprdir()
     wrapper_binary = rslvwrprbin()
     if not wrapper_binary.exists():
-        return None, "Wrapper可执行文件不存在。"
+        return None, "解密组件可执行文件不存在。"
 
     try:
         wrapper_dir_wsl = wntowslpth(wrapper_dir)
     except Exception as e:
-        return None, f"Wrapper目录路径转换失败: {e}"
+        return None, f"解密组件目录路径转换失败: {e}"
 
     shell_cmd = f"cd {shlex.quote(wrapper_dir_wsl)} && ./wrapper -H 0.0.0.0"
     wrprstlog("启动命令: ./wrapper -H 0.0.0.0")
@@ -387,14 +387,14 @@ def lnchwrprprc() -> tuple[Optional[subprocess.Popen], str]:
             creationflags=creation_flags,
         )
     except Exception as e:
-        return None, f"启动Wrapper进程失败: {e}"
+        return None, f"启动解密组件进程失败: {e}"
 
     setwrprprc(process)
     strtwrprrdr(process)
     return process, ""
 
 
-# 等待Wrapper服务端口就绪或捕获等待输入状态
+# 等待解密组件服务端口就绪或捕获等待输入状态
 def wtwrprrdy(timeout_seconds: int) -> str:
     start_ts = time.time()
     prompt_seen_at: Optional[float] = None
@@ -402,7 +402,7 @@ def wtwrprrdy(timeout_seconds: int) -> str:
         state = wrprstcpy()
 
         if iswrprrun():
-            mrkwrprscc("Wrapper正在运行。")
+            mrkwrprscc("解密组件正在运行。")
             return "running"
 
         if state.get("awaiting_input"):
@@ -415,13 +415,13 @@ def wtwrprrdy(timeout_seconds: int) -> str:
 
         process = gtwrprprc()
         if process is None:
-            mrkwrprfld("Wrapper进程未启动。")
+            mrkwrprfld("解密组件进程未启动。")
             return "error"
 
         return_code = process.poll()
         if return_code is not None:
             if iswrprrun():
-                mrkwrprscc("Wrapper正在运行。")
+                mrkwrprscc("解密组件正在运行。")
                 return "running"
 
             state_now = wrprstcpy()
@@ -429,20 +429,20 @@ def wtwrprrdy(timeout_seconds: int) -> str:
                 return "awaiting_input"
 
             detail = _wrapper_last_output.strip()
-            message = f"Wrapper进程已退出（退出码 {return_code}）。"
+            message = f"解密组件进程已退出（退出码 {return_code}）。"
             if detail:
                 message += f" 最近输出：{detail}"
             mrkwrprfld(message)
             return "error"
 
         if (time.time() - start_ts) > timeout_seconds:
-            mrkwrprfld("等待Wrapper启动超时，请查看日志并重试。")
+            mrkwrprfld("等待解密组件启动超时，请查看日志并重试。")
             return "error"
 
         time.sleep(0.6)
 
 
-# 构建Wrapper环境预检状态概览
+# 构建解密组件环境预检状态概览
 def bldwrprprchk() -> Dict[str, Any]:
     wsl2_installed, wsl_hint = dtctwsl()
     wrapper_installed = iswrprinst()
@@ -452,11 +452,11 @@ def bldwrprprchk() -> Dict[str, Any]:
     if not wsl2_installed:
         message = "请先安装WSL2。"
     elif wrapper_running:
-        message = "检测到Wrapper正在运行，初始化时将执行重启与状态校验。"
+        message = "检测到解密组件正在运行，初始化时将执行重启与状态校验。"
     elif wrapper_installed:
-        message = "检测到Wrapper已安装，可直接启动并登录。"
+        message = "检测到解密组件已安装，可直接启动并登录。"
     else:
-        message = "未检测到Wrapper，启动时将自动下载并安装。"
+        message = "未检测到解密组件，启动时将自动下载并安装。"
 
     return {
         "success": True,
@@ -470,7 +470,7 @@ def bldwrprprchk() -> Dict[str, Any]:
     }
 
 
-# Wrapper启动与监控后台执行线程
+# 解密组件启动与监控后台执行线程
 def wrprmntrwrkr(
     launch_new: bool,
     use_cached_credentials: bool = False,
@@ -486,9 +486,9 @@ def wrprmntrwrkr(
             awaiting_input=False,
             input_type="",
             input_prompt="",
-            message="正在检查Wrapper运行环境...",
+            message="正在检查解密组件运行环境...",
         )
-        wrprstlog("开始执行Wrapper安装/启动流程。")
+        wrprstlog("开始执行解密组件安装/启动流程。")
 
         wsl2_installed, _wsl_hint = dtctwsl()
         if not wsl2_installed:
@@ -497,43 +497,43 @@ def wrprmntrwrkr(
         wrprstset(wsl2_installed=True)
 
         if force_restart:
-            wrprstset(stage="restart-wrapper", message="检测到初始化请求，正在重启Wrapper服务...")
-            wrprstlog("检测到初始化请求：即使Wrapper已运行也将强制重启。")
+            wrprstset(stage="restart-wrapper", message="检测到初始化请求，正在重启解密组件服务...")
+            wrprstlog("检测到初始化请求：即使解密组件已运行也将强制重启。")
             stpwrprsrv()
 
         if iswrprrun():
-            mrkwrprscc("Wrapper正在运行。")
+            mrkwrprscc("解密组件正在运行。")
             return
 
         if not iswrprinst():
             ok, install_error = ensrwrprinst()
             if not ok:
-                mrkwrprfld(install_error or "下载Wrapper失败。")
+                mrkwrprfld(install_error or "下载解密组件失败。")
                 return
         wrprstset(wrapper_installed=iswrprinst())
 
         if iswrprrun():
-            mrkwrprscc("Wrapper正在运行。")
+            mrkwrprscc("解密组件正在运行。")
             return
 
         process: Optional[subprocess.Popen] = None
         if launch_new:
-            wrprstset(stage="start-wrapper", message="正在启动Wrapper服务...")
+            wrprstset(stage="start-wrapper", message="正在启动解密组件服务...")
             process, launch_error = lnchwrprprc()
             if not process:
-                mrkwrprfld(launch_error or "启动Wrapper服务失败。")
+                mrkwrprfld(launch_error or "启动解密组件服务失败。")
                 return
         else:
             process = gtwrprprc()
             if process is None or process.poll() is not None:
                 if use_cached_credentials and _wrapper_cached_credentials:
-                    wrprstset(stage="restart-wrapper", message="正在使用已提交账号重启Wrapper...")
+                    wrprstset(stage="restart-wrapper", message="正在使用已提交账号重启解密组件...")
                     process, launch_error = lnchwrprprc()
                     if not process:
-                        mrkwrprfld(launch_error or "重启Wrapper服务失败。")
+                        mrkwrprfld(launch_error or "重启解密组件服务失败。")
                         return
                 else:
-                    rqstwrprint("credentials", "Wrapper需要登录，请输入Apple ID与密码。")
+                    rqstwrprint("credentials", "解密组件需要登录，请输入账号与密码。")
                     return
 
         timeout_seconds = WRAPPER_SETUP_TIMEOUT_SECONDS if launch_new else WRAPPER_STARTUP_GRACE_SECONDS
@@ -551,10 +551,10 @@ def wrprmntrwrkr(
         return
     except Exception as e:
         logger.exception("Wrapper setup worker failed")
-        mrkwrprfld(f"Wrapper流程异常：{e}")
+        mrkwrprfld(f"解密组件流程异常：{e}")
 
 
-# 触发Wrapper守护线程
+# 触发解密组件守护线程
 def strtwrprwrkr(
     *,
     launch_new: bool,
@@ -595,13 +595,13 @@ def strtwrprwrkr(
     return True
 
 
-# 向Wrapper标准输入流写入字符串
+# 向解密组件标准输入流写入字符串
 def sndwrprint(lines: List[str]) -> tuple[bool, str]:
     process = gtwrprprc()
     if process is None or process.poll() is not None:
-        return False, "当前Wrapper进程未运行或已退出。"
+        return False, "当前解密组件进程未运行或已退出。"
     if process.stdin is None:
-        return False, "Wrapper进程输入流不可用。"
+        return False, "解密组件进程输入流不可用。"
 
     try:
         for line in lines:
@@ -609,16 +609,16 @@ def sndwrprint(lines: List[str]) -> tuple[bool, str]:
         process.stdin.flush()
         return True, ""
     except Exception as e:
-        return False, f"写入Wrapper输入流失败: {e}"
+        return False, f"写入解密组件输入流失败: {e}"
 
 
-# Wrapper部署环境预检端点
+# 解密组件部署环境预检端点
 @router.get("/wrapper/setup/precheck")
 async def wrprprchkrtr():
     return await asyncio.to_thread(bldwrprprchk)
 
 
-# 启动Wrapper部署与初始化流程端点
+# 启动解密组件部署与初始化流程端点
 @router.post("/wrapper/setup/start")
 async def strtwrprrtr(request: WrapperSetupStartRequest):
     precheck = await asyncio.to_thread(bldwrprprchk)
@@ -658,12 +658,12 @@ async def strtwrprrtr(request: WrapperSetupStartRequest):
             wsl2_installed=True,
             wrapper_installed=True,
             wrapper_running=True,
-            message="Wrapper正在运行。",
+            message="解密组件正在运行。",
         )
         return {
             "success": True,
             "status": "success",
-            "message": "Wrapper正在运行。",
+            "message": "解密组件正在运行。",
         }
 
     current_state = wrprstcpy()
@@ -671,7 +671,7 @@ async def strtwrprrtr(request: WrapperSetupStartRequest):
         return {
             "success": True,
             "status": "running",
-            "message": "Wrapper任务已在进行中。",
+            "message": "解密组件任务已在进行中。",
         }
 
     global _wrapper_cached_credentials
@@ -689,17 +689,17 @@ async def strtwrprrtr(request: WrapperSetupStartRequest):
         return {
             "success": True,
             "status": "running",
-            "message": "Wrapper任务已在进行中。",
+            "message": "解密组件任务已在进行中。",
         }
 
     return {
         "success": True,
         "status": "running",
-        "message": "Wrapper安装/登录流程已启动。" if not force_restart else "Wrapper重启与登录流程已启动。",
+        "message": "解密组件安装/登录流程已启动。" if not force_restart else "解密组件重启与登录流程已启动。",
     }
 
 
-# 获取Wrapper部署与认证进度端点
+# 获取解密组件部署与认证进度端点
 @router.get("/wrapper/setup/status")
 async def gtwrprsttsrtr():
     state = wrprstcpy()
@@ -718,7 +718,7 @@ async def gtwrprsttsrtr():
             wsl2_installed=True,
             wrapper_installed=True,
             wrapper_running=True,
-            message="Wrapper正在运行。",
+            message="解密组件正在运行。",
         )
         state = wrprstcpy()
     state["wsl2_installed"] = bool(state.get("wsl2_installed"))
@@ -727,7 +727,7 @@ async def gtwrprsttsrtr():
     return {"success": True, **state}
 
 
-# 提交Wrapper交互凭证或验证码端点
+# 提交解密组件交互凭证或验证码端点
 @router.post("/wrapper/setup/input")
 async def sbmtwrpin(request: WrapperSetupInputRequest):
     state = wrprstcpy()
@@ -738,7 +738,7 @@ async def sbmtwrpin(request: WrapperSetupInputRequest):
         return {
             "success": False,
             "status": "error",
-            "message": "当前Wrapper未处于等待输入状态。",
+            "message": "当前解密组件未处于等待输入状态。",
         }
 
     input_type = requested or expected
@@ -753,14 +753,14 @@ async def sbmtwrpin(request: WrapperSetupInputRequest):
         apple_id = (request.apple_id or "").strip()
         password = (request.password or "").strip()
         if not apple_id or not password:
-            return {"success": False, "status": "error", "message": "请输入Apple ID与密码。"}
+            return {"success": False, "status": "error", "message": "请输入账号与密码。"}
 
         global _wrapper_cached_credentials
         _wrapper_cached_credentials = (apple_id, password)
 
         sent, err = await asyncio.to_thread(sndwrprint, [apple_id, password])
         if sent:
-            wrprstlog("已提交Apple ID与密码，等待2FA或服务启动。")
+            wrprstlog("已提交账号与密码，等待两步验证或服务启动。")
             strtwrprwrkr(
                 launch_new=False,
                 use_cached_credentials=True,
@@ -771,36 +771,36 @@ async def sbmtwrpin(request: WrapperSetupInputRequest):
             )
             return {"success": True, "status": "running", "message": "账号密码已提交。"}
 
-        wrprstlog(f"当前进程不接受输入，将重启Wrapper继续登录。原因: {err}")
+        wrprstlog(f"当前进程不接受输入，将重启解密组件继续登录。原因: {err}")
         strtwrprwrkr(
             launch_new=True,
             use_cached_credentials=True,
             reset_logs=False,
             stage="restart-wrapper",
-            message="正在重启Wrapper并继续登录...",
+            message="正在重启解密组件并继续登录...",
             allow_if_running=True,
         )
-        return {"success": True, "status": "running", "message": "正在重启Wrapper并继续登录。"}
+        return {"success": True, "status": "running", "message": "正在重启解密组件并继续登录。"}
 
     if input_type == "2fa":
         code = (request.code or "").strip()
         if not code:
-            return {"success": False, "status": "error", "message": "请输入2FA验证码。"}
+            return {"success": False, "status": "error", "message": "请输入两步验证码。"}
 
         sent, err = await asyncio.to_thread(sndwrprint, [code])
         if not sent:
-            return {"success": False, "status": "error", "message": err or "提交2FA验证码失败。"}
+            return {"success": False, "status": "error", "message": err or "提交两步验证码失败。"}
 
-        wrprstlog("已提交2FA验证码，等待Wrapper完成启动。")
+        wrprstlog("已提交两步验证码，等待解密组件完成启动。")
         strtwrprwrkr(
             launch_new=False,
             use_cached_credentials=True,
             reset_logs=False,
             stage="auth-2fa",
-            message="2FA验证码已提交，正在等待服务就绪...",
+            message="两步验证码已提交，正在等待服务就绪...",
             allow_if_running=True,
         )
-        return {"success": True, "status": "running", "message": "2FA验证码已提交。"}
+        return {"success": True, "status": "running", "message": "两步验证码已提交。"}
 
     return {"success": False, "status": "error", "message": "未知的输入类型。"}
 
