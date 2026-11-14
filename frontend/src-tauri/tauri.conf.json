@@ -25,7 +25,70 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": ["'self'"],
+        "connect-src": [
+          "'self'",
+          "ipc:",
+          "http://ipc.localhost",
+          "http://127.0.0.1:8000",
+          "http://localhost:8000"
+        ],
+        "img-src": [
+          "'self'",
+          "asset:",
+          "http://asset.localhost",
+          "blob:",
+          "data:",
+          "https://*.mzstatic.com",
+          "http://127.0.0.1:8000",
+          "http://localhost:8000"
+        ],
+        "media-src": [
+          "'self'",
+          "blob:",
+          "http://127.0.0.1:8000",
+          "http://localhost:8000"
+        ],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "font-src": ["'self'", "data:"],
+        "script-src": ["'self'"],
+        "worker-src": ["'self'", "blob:"]
+      },
+      "devCsp": {
+        "default-src": ["'self'"],
+        "connect-src": [
+          "'self'",
+          "ipc:",
+          "http://ipc.localhost",
+          "http://127.0.0.1:8000",
+          "http://localhost:8000",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+          "ws://localhost:5173",
+          "ws://127.0.0.1:5173"
+        ],
+        "img-src": [
+          "'self'",
+          "asset:",
+          "http://asset.localhost",
+          "blob:",
+          "data:",
+          "https://*.mzstatic.com",
+          "http://127.0.0.1:8000",
+          "http://localhost:8000"
+        ],
+        "media-src": [
+          "'self'",
+          "blob:",
+          "http://127.0.0.1:8000",
+          "http://localhost:8000"
+        ],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "font-src": ["'self'", "data:"],
+        "script-src": ["'self'", "'unsafe-eval'"],
+        "worker-src": ["'self'", "blob:"]
+      }
     }
   },
   "bundle": {

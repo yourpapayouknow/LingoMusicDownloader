@@ -137,8 +137,10 @@ def mrkwrprfld(msg: str) -> None:
     )
 
 
-# 标记Wrapper流程成功就绪状态
+# 标记Wrapper流程成功就绪状态（成功后清除内存中的账号密码）
 def mrkwrprscc(msg: str) -> None:
+    global _wrapper_cached_credentials
+    _wrapper_cached_credentials = None
     wrprstlog(msg)
     wrprstset(
         status="success",
@@ -229,7 +231,10 @@ def hndlwrprout(text: str) -> None:
     if prompt_type == "2fa":
         rqstwrprint("2fa", "检测到Wrapper需要2FA验证码，请输入验证码后继续。")
     elif prompt_type == "credentials":
-        rqstwrprint("credentials", "检测到Wrapper等待Apple ID与密码，请输入后继续。")
+        if _wrapper_cached_credentials and sndwrprint(list(_wrapper_cached_credentials))[0]:
+            wrprstlog("已通过标准输入提交缓存的账号密码。")
+        else:
+            rqstwrprint("credentials", "检测到Wrapper等待Apple ID与密码，请输入后继续。")
 
 
 # 异步读取Wrapper进程输出日志流
@@ -276,6 +281,36 @@ def strtwrprrdr(process: subprocess.Popen) -> None:
     thread.start()
 
 
+# 下载Wrapper发布包并限制传输大小
+def dlmwraprzip(url: str, dest: Path) -> None:
+    max_bytes = 300 * 1024 * 1024
+    with urllib.request.urlopen(url, timeout=120) as resp, dest.open("wb") as fh:
+        total = 0
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError("Wrapper压缩包超过允许的大小上限。")
+            fh.write(chunk)
+
+
+# 安全解压Wrapper压缩包并拒绝路径穿越
+def sfzipxtr(zip_path: Path, dest_dir: Path) -> None:
+    dest_resolved = dest_dir.resolve()
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in zf.infolist():
+            raw_name = member.filename.replace("\\", "/")
+            parts = raw_name.split("/")
+            if raw_name.startswith("/") or re.match(r"^[A-Za-z]:", raw_name) or ".." in parts:
+                raise ValueError(f"压缩包包含非法路径: {member.filename}")
+            target = (dest_resolved / raw_name).resolve()
+            if target != dest_resolved and dest_resolved not in target.parents:
+                raise ValueError(f"压缩包路径越界: {member.filename}")
+        zf.extractall(dest_resolved)
+
+
 # 确保Wrapper程序已下载并具有执行权限
 def ensrwrprinst() -> tuple[bool, str]:
     wrapper_dir = rslvwrprdir()
@@ -287,12 +322,13 @@ def ensrwrprinst() -> tuple[bool, str]:
         wrprstlog("未检测到本地Wrapper，开始下载。")
         zip_path = wrapper_dir / "wrapper.zip"
         try:
-            urllib.request.urlretrieve(WRAPPER_RELEASE_ZIP_URL, str(zip_path))
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(wrapper_dir)
+            dlmwraprzip(WRAPPER_RELEASE_ZIP_URL, zip_path)
+            sfzipxtr(zip_path, wrapper_dir)
             if zip_path.exists():
                 zip_path.unlink(missing_ok=True)
         except Exception as e:
+            if zip_path.exists():
+                zip_path.unlink(missing_ok=True)
             return False, f"下载Wrapper失败: {e}"
 
         if not wrapper_binary.exists():
@@ -327,8 +363,8 @@ def ensrwrprinst() -> tuple[bool, str]:
     return True, ""
 
 
-# 启动Wrapper服务子进程
-def lnchwrprprc(use_cached_credentials: bool = False) -> tuple[Optional[subprocess.Popen], str]:
+# 启动Wrapper服务子进程（账号密码只经标准输入提交，不进入命令行）
+def lnchwrprprc() -> tuple[Optional[subprocess.Popen], str]:
     wrapper_dir = rslvwrprdir()
     wrapper_binary = rslvwrprbin()
     if not wrapper_binary.exists():
@@ -339,16 +375,8 @@ def lnchwrprprc(use_cached_credentials: bool = False) -> tuple[Optional[subproce
     except Exception as e:
         return None, f"Wrapper目录路径转换失败: {e}"
 
-    login_part = ""
-    log_login_part = ""
-    if use_cached_credentials and _wrapper_cached_credentials:
-        apple_id, password = _wrapper_cached_credentials
-        login_pair = f"{apple_id}:{password}"
-        login_part = f" -L {shlex.quote(login_pair)}"
-        log_login_part = " -L <masked>"
-
-    shell_cmd = f"cd {shlex.quote(wrapper_dir_wsl)} && ./wrapper{login_part} -H 0.0.0.0"
-    wrprstlog(f"启动命令: ./wrapper{log_login_part} -H 0.0.0.0")
+    shell_cmd = f"cd {shlex.quote(wrapper_dir_wsl)} && ./wrapper -H 0.0.0.0"
+    wrprstlog("启动命令: ./wrapper -H 0.0.0.0")
 
     creation_flags = int(getattr(subprocess, "CREATE_NO_WINDOW", 0)) if os.name == "nt" else 0
     try:
@@ -496,7 +524,7 @@ def wrprmntrwrkr(
         process: Optional[subprocess.Popen] = None
         if launch_new:
             wrprstset(stage="start-wrapper", message="正在启动Wrapper服务...")
-            process, launch_error = lnchwrprprc(use_cached_credentials=use_cached_credentials)
+            process, launch_error = lnchwrprprc()
             if not process:
                 mrkwrprfld(launch_error or "启动Wrapper服务失败。")
                 return
@@ -505,7 +533,7 @@ def wrprmntrwrkr(
             if process is None or process.poll() is not None:
                 if use_cached_credentials and _wrapper_cached_credentials:
                     wrprstset(stage="restart-wrapper", message="正在使用已提交账号重启Wrapper...")
-                    process, launch_error = lnchwrprprc(use_cached_credentials=True)
+                    process, launch_error = lnchwrprprc()
                     if not process:
                         mrkwrprfld(launch_error or "重启Wrapper服务失败。")
                         return

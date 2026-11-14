@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
+/* 使用系统字体栈，离线可用且无需远程字体源 */
 
 /* Hide scrollbars globally for a clean desktop experience */
 ::-webkit-scrollbar {
@@ -29,7 +29,7 @@ body {
 code,
 pre,
 .ui-mono {
-  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-family: 'Cascadia Mono', 'Consolas', 'Courier New', monospace;
 }
 
 button,

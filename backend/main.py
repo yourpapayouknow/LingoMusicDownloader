@@ -18,13 +18,21 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
 )
 
-# 注册跨域资源共享中间件
+# 允许的前端来源：Vite开发态与Tauri生产态本地协议
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+]
+
+# 注册跨域资源共享中间件（仅允许本地前端来源，不携带凭据）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 # 挂载业务API路由组
@@ -50,4 +58,4 @@ startup_event = strtpevt
 
 # 独立启动执行入口
 if __name__ == "__main__":
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000)
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000)

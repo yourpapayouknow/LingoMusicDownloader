@@ -32,6 +32,31 @@ class OpenFolderRequest(BaseModel):
     path: Optional[str] = None
 
 
+# 校验目录打开请求并限定在下载/转换目录内
+def vldopnptr(raw_path: Optional[str]) -> Path:
+    roots = [Path(settings.outpth()).resolve(), Path(settings.cnvtpth()).resolve()]
+    if not raw_path:
+        return roots[0]
+    try:
+        resolved = Path(raw_path).expanduser().resolve(strict=False)
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=f"路径无效: {exc}")
+    if not any(resolved == root or root in resolved.parents for root in roots):
+        raise HTTPException(status_code=403, detail="只允许打开下载或转换目录内的路径")
+    return resolved
+
+
+# 在系统文件管理器中打开目录或定位文件
+def opnptr(target: Path, is_file: bool) -> None:
+    if os.name == "nt":
+        if is_file:
+            subprocess.run(["explorer", "/select,", str(target)])
+        else:
+            os.startfile(str(target))
+    else:
+        subprocess.run(["xdg-open", str(target)])
+
+
 # 强制转换媒体元数据标签值
 def crctagval(value: Any) -> str:
     if isinstance(value, (list, tuple)):
@@ -490,24 +515,14 @@ async def gtlcllrc(track_id: str):
 # 打开下载资源管理器目录端点
 @router.post("/open-folder")
 async def opndwnldfldr(request: OpenFolderRequest):
-    path = request.path
-    target_path = path or settings.outpth()
-    if not os.path.exists(target_path) and not path:
-        os.makedirs(target_path, exist_ok=True)
-
-    if path and not os.path.exists(target_path):
-        target_path = os.path.dirname(target_path)
-        if not os.path.exists(target_path):
+    target_path = vldopnptr(request.path)
+    if not target_path.exists():
+        if request.path:
             raise HTTPException(status_code=404, detail="Target path not found")
+        target_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        if os.name == "nt":
-            if path and os.path.isfile(path):
-                subprocess.run(["explorer", "/select,", os.path.normpath(path)])
-            else:
-                os.startfile(os.path.normpath(target_path))
-        else:
-            subprocess.run(["xdg-open", target_path])
+        await asyncio.to_thread(opnptr, target_path, target_path.is_file())
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -516,13 +531,10 @@ async def opndwnldfldr(request: OpenFolderRequest):
 # 打开音频格式转换输出目录端点
 @router.post("/open-converted-folder")
 async def opncnvtfldr():
-    target_path = settings.cnvtpth()
-    os.makedirs(target_path, exist_ok=True)
+    target_path = Path(settings.cnvtpth())
+    target_path.mkdir(parents=True, exist_ok=True)
     try:
-        if os.name == "nt":
-            os.startfile(os.path.normpath(target_path))
-        else:
-            subprocess.run(["xdg-open", target_path])
+        await asyncio.to_thread(opnptr, target_path, False)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

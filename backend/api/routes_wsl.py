@@ -1,7 +1,7 @@
 # WSL2环境预检、自动化安装与运行状态管理模块
 from backend.head import (
     APIRouter, HTTPException, BaseModel, Optional, List, Dict, Any,
-    asyncio, os, time, json, subprocess, tempfile, threading, Path, re, logging
+    asyncio, os, time, json, subprocess, tempfile, threading, Path, re, logging, shutil
 )
 from backend.api.common import (
     WSL2_REQUIRED_FREE_GB, WSL2_D_INSTALL_PATH, WSL2_UBUNTU_DISTRO,
@@ -319,8 +319,7 @@ try {{
     Add-Log "检测到Ubuntu发行版已存在，跳过安装步骤。"
   }}
 
-  Write-State "running" "configure-root" $false $false "配置默认root用户与密码"
-  Invoke-Native 'wsl.exe' @('-d', $Distro, '-u', 'root', '--', 'bash', '-lc', "echo 'root:root' | chpasswd")
+  Write-State "running" "configure-root" $false $false "配置默认root用户"
   Invoke-Native 'wsl.exe' @('-d', $Distro, '-u', 'root', '--', 'bash', '-lc', "printf '[user]\\ndefault=root\\n' > /etc/wsl.conf")
   Invoke-Native 'wsl.exe' @('--shutdown')
   Invoke-Native 'wsl.exe' @('-d', $Distro, '-u', 'root', '--', 'bash', '-lc', 'id -un')
@@ -348,28 +347,28 @@ try {{
     script_path.write_text(content, encoding="utf-8")
 
 
-# 启动UAC提权安装后台进程
+# 解析gsudo可执行文件路径
+def rslvgsudo() -> str:
+    path = shutil.which("gsudo")
+    if not path:
+        raise RuntimeError("未检测到gsudo，请先安装gsudo后再执行WSL2安装。")
+    return path
+
+
+# 通过gsudo启动提权安装后台进程
 def trylnchelv(script_path: Path) -> tuple[bool, str]:
-    arg_str = f'-NoProfile -ExecutionPolicy Bypass -File "{script_path}"'
-    ps_cmd = (
-        "Start-Process -FilePath 'pwsh.exe' "
-        f"-Verb RunAs -WindowStyle Hidden -ArgumentList { pssqt(arg_str) }"
-    )
     try:
-        result = subprocess.run(
-            ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            encoding="utf-8",
-            errors="replace",
+        gsudo = rslvgsudo()
+        cmd = [gsudo, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)]
+        subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=int(getattr(subprocess, "CREATE_NO_WINDOW", 0)) if os.name == "nt" else 0,
         )
     except Exception as e:
         return False, f"提权进程启动异常: {e}"
-
-    if result.returncode != 0:
-        detail = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
-        return False, detail or "提权请求失败或被取消。"
     return True, ""
 
 
@@ -480,95 +479,8 @@ def wslinstwrkr(precheck: Dict[str, Any]) -> None:
             wslstlog("检测到本机已安装WSL2，安装流程已跳过。")
             return
 
-        if not isadmin():
-            wslstlog("当前非管理员权限，将尝试发起UAC提权安装。")
-            rnelvwslinst(precheck)
-            return
-
-        wslstset(stage="check-wsl")
-        check_cmd = subprocess.run(
-            ["wsl", "--status"],
-            capture_output=True,
-            text=True,
-            timeout=20,
-            encoding="utf-8",
-            errors="replace",
-        )
-        if check_cmd.returncode != 0 and "WSL" not in (check_cmd.stdout + check_cmd.stderr):
-            wslstlog("未检测到可用WSL命令，尝试继续执行安装。")
-        else:
-            wslstlog("已检测到WSL命令可用。")
-
-        if hasubnt():
-            wslstlog("检测到Ubuntu发行版已存在，跳过安装步骤。")
-        else:
-            wslstset(stage="install-ubuntu")
-            install_candidates: List[List[str]] = []
-            if precheck.get("use_custom_location"):
-                target_path = str(precheck.get("target_path") or WSL2_D_INSTALL_PATH)
-                try:
-                    os.makedirs(target_path, exist_ok=True)
-                except Exception as e:
-                    wslstlog(f"创建安装目录失败，将继续安装: {e}")
-                install_candidates.extend([
-                    ["wsl", "--install", "-d", WSL2_UBUNTU_DISTRO, "--no-launch", "--web-download", "--location", target_path],
-                    ["wsl", "--install", "-d", WSL2_UBUNTU_DISTRO, "--location", target_path],
-                ])
-            install_candidates.extend([
-                ["wsl", "--install", "-d", WSL2_UBUNTU_DISTRO, "--no-launch", "--web-download"],
-                ["wsl", "--install", "-d", WSL2_UBUNTU_DISTRO],
-            ])
-
-            install_ok = False
-            for cmd in install_candidates:
-                rc = rncmdlog(cmd, tmout_sec=5400)
-                if rc == 0:
-                    install_ok = True
-                    break
-                wslstlog(f"安装命令返回码 {rc}，尝试下一组参数。")
-
-            if not install_ok:
-                mrkwslfld("WSL2/Ubuntu 安装失败，请检查系统日志或手动执行 `wsl --install`。")
-                return
-
-            for _ in range(20):
-                if hasubnt():
-                    break
-                time.sleep(1.2)
-            if not hasubnt():
-                mrkwslfld("安装完成后未检测到Ubuntu发行版，可能需要重启系统后重试。")
-                return
-            wslstlog("Ubuntu发行版安装完成。")
-
-        wslstset(stage="configure-root")
-        wslstlog("开始配置默认用户与密码（root/root）。")
-        config_commands = [
-            ["wsl", "-d", WSL2_UBUNTU_DISTRO, "-u", "root", "--", "bash", "-lc", "echo 'root:root' | chpasswd"],
-            ["wsl", "-d", WSL2_UBUNTU_DISTRO, "-u", "root", "--", "bash", "-lc", "printf '[user]\\ndefault=root\\n' > /etc/wsl.conf"],
-            ["wsl", "--shutdown"],
-            ["wsl", "-d", WSL2_UBUNTU_DISTRO, "-u", "root", "--", "bash", "-lc", "id -un"],
-        ]
-        for cmd in config_commands:
-            rc = rncmdlog(cmd, tmout_sec=180)
-            if rc != 0:
-                mrkwslfld("WSL2配置步骤失败，请确认Ubuntu可正常启动后重试。")
-                return
-
-        wslstset(stage="health-check")
-        wslstlog("执行最终健康检查。")
-        if not hasubnt():
-            mrkwslfld("最终检查失败：未检测到Ubuntu发行版。")
-            return
-
-        wslstset(
-            status="success",
-            stage="completed",
-            running=False,
-            completed=True,
-            success_flag=True,
-            message="WSL2与Ubuntu安装配置完成。",
-        )
-        wslstlog("WSL2与Ubuntu安装配置完成。")
+        wslstlog("正在请求管理员权限执行WSL2安装...")
+        rnelvwslinst(precheck)
     except Exception as e:
         logger.exception("WSL2 install worker failed")
         mrkwslfld(f"安装流程异常：{e}")
