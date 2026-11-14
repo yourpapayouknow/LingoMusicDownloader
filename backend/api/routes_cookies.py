@@ -166,6 +166,7 @@ def dcryptchrmck(raw_value: str, encrypted_value: bytes, master_key: Optional[by
     prefix = encrypted_value[:3]
     if prefix in {b"v10", b"v11", b"v20"} and master_key and len(encrypted_value) > 31:
         try:
+            # 惰性导入：避免启动期加载pycryptodome重型依赖
             from Crypto.Cipher import AES
             nonce = encrypted_value[3:15]
             ciphertext = encrypted_value[15:-16]
@@ -174,7 +175,7 @@ def dcryptchrmck(raw_value: str, encrypted_value: bytes, master_key: Optional[by
             decrypted = cipher.decrypt_and_verify(ciphertext, tag)
             return dcdckval(decrypted)
         except Exception:
-            pass
+            logger.debug("AES cookie decrypt failed, falling back to DPAPI", exc_info=True)
 
     try:
         return dcdckval(dpapiunprt(encrypted_value))

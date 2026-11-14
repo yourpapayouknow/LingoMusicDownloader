@@ -10,7 +10,7 @@ from backend.api.common import (
     WRAPPER_SETUP_TIMEOUT_SECONDS, WRAPPER_STARTUP_GRACE_SECONDS,
     WRAPPER_SESSION_DB_RELATIVE_PATH,
     chkprt, rncptr, wrprstcpy, wrprstset, wrprstlog, setwrprprc, gtwrprprc,
-    _wrapper_setup_state_lock, _wrapper_process_lock
+    wrprhlth, _wrapper_setup_state_lock, _wrapper_process_lock
 )
 from backend.api.routes_wsl import dtctwsl
 
@@ -78,11 +78,7 @@ def iswrprinst() -> bool:
 
 # 检查Wrapper核心端口是否处于监听状态
 def iswrprrun() -> bool:
-    return (
-        chkprt("127.0.0.1", WRAPPER_DECRYPT_PORT, WRAPPER_PORT_CHECK_TIMEOUT_SECONDS)
-        and chkprt("127.0.0.1", WRAPPER_M3U8_PORT, WRAPPER_PORT_CHECK_TIMEOUT_SECONDS)
-        and chkprt("127.0.0.1", WRAPPER_ACCOUNT_PORT, WRAPPER_PORT_CHECK_TIMEOUT_SECONDS)
-    )
+    return bool(wrprhlth().get("all_ok"))
 
 
 # 停止当前运行的Wrapper服务与外部WSL进程
@@ -217,6 +213,17 @@ def dtctprmptyp(text: str) -> Optional[str]:
     return None
 
 
+# 根据提示类型请求前端输入或提交缓存凭据
+def hndlprmpt(prompt_type: Optional[str]) -> None:
+    if prompt_type == "2fa":
+        rqstwrprint("2fa", "检测到Wrapper需要2FA验证码，请输入验证码后继续。")
+    elif prompt_type == "credentials":
+        if _wrapper_cached_credentials and sndwrprint(list(_wrapper_cached_credentials))[0]:
+            wrprstlog("已通过标准输入提交缓存的账号密码。")
+        else:
+            rqstwrprint("credentials", "检测到Wrapper等待Apple ID与密码，请输入后继续。")
+
+
 # 处理Wrapper实时输出文本片段
 def hndlwrprout(text: str) -> None:
     global _wrapper_last_output
@@ -226,15 +233,7 @@ def hndlwrprout(text: str) -> None:
 
     _wrapper_last_output = cleaned
     wrprstlog(cleaned)
-
-    prompt_type = dtctprmptyp(cleaned)
-    if prompt_type == "2fa":
-        rqstwrprint("2fa", "检测到Wrapper需要2FA验证码，请输入验证码后继续。")
-    elif prompt_type == "credentials":
-        if _wrapper_cached_credentials and sndwrprint(list(_wrapper_cached_credentials))[0]:
-            wrprstlog("已通过标准输入提交缓存的账号密码。")
-        else:
-            rqstwrprint("credentials", "检测到Wrapper等待Apple ID与密码，请输入后继续。")
+    hndlprmpt(dtctprmptyp(cleaned))
 
 
 # 异步读取Wrapper进程输出日志流
@@ -261,11 +260,7 @@ def wrproutrdr(process: subprocess.Popen) -> None:
                     hndlwrprout(line)
 
             tail = carry[-220:]
-            prompt_type = dtctprmptyp(tail)
-            if prompt_type == "2fa":
-                rqstwrprint("2fa", "检测到Wrapper需要2FA验证码，请输入验证码后继续。")
-            elif prompt_type == "credentials":
-                rqstwrprint("credentials", "检测到Wrapper等待Apple ID与密码，请输入后继续。")
+            hndlprmpt(dtctprmptyp(tail))
     except Exception as e:
         wrprstlog(f"读取Wrapper输出流异常: {e}")
     finally:

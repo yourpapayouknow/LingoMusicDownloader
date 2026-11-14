@@ -95,8 +95,6 @@ _wrapper_setup_state: Dict[str, Any] = {
 
 _wrapper_process_lock = threading.RLock()
 _wrapper_process: Optional[subprocess.Popen] = None
-_wrapper_reader_thread: Optional[threading.Thread] = None
-_wrapper_last_output: str = ""
 
 
 # 转义PowerShell单引号字符串
@@ -104,34 +102,49 @@ def pssqt(val: str) -> str:
     return "'" + (val or "").replace("'", "''") + "'"
 
 
-# 读取WSL安装状态副本
-def wslstcpy() -> Dict[str, Any]:
-    with _wsl2_install_state_lock:
-        payload = dict(_wsl2_install_state)
-        payload["logs"] = list(_wsl2_install_state.get("logs", []))
+# 读取状态字典副本
+def _stcpy(state: Dict[str, Any], lock: threading.RLock) -> Dict[str, Any]:
+    with lock:
+        payload = dict(state)
+        payload["logs"] = list(state.get("logs", []))
         return payload
 
 
-# 更新WSL安装状态
-def wslstset(**kwargs) -> None:
-    with _wsl2_install_state_lock:
-        _wsl2_install_state.update(kwargs)
-        _wsl2_install_state["updated_at"] = time.time()
+# 更新状态字典
+def _stset(state: Dict[str, Any], lock: threading.RLock, kwargs: Dict[str, Any]) -> None:
+    with lock:
+        state.update(kwargs)
+        state["updated_at"] = time.time()
 
 
-# 追加WSL安装日志
-def wslstlog(msg: str) -> None:
+# 追加状态日志并裁剪上限
+def _stlog(state: Dict[str, Any], lock: threading.RLock, max_logs: int, msg: str) -> None:
     text = (msg or "").strip()
     if not text:
         return
     ts = time.strftime("%H:%M:%S")
     line = f"[{ts}] {text}"
-    with _wsl2_install_state_lock:
-        logs = _wsl2_install_state.setdefault("logs", [])
+    with lock:
+        logs = state.setdefault("logs", [])
         logs.append(line)
-        if len(logs) > 500:
-            del logs[: len(logs) - 500]
-        _wsl2_install_state["updated_at"] = time.time()
+        if len(logs) > max_logs:
+            del logs[: len(logs) - max_logs]
+        state["updated_at"] = time.time()
+
+
+# 读取WSL安装状态副本
+def wslstcpy() -> Dict[str, Any]:
+    return _stcpy(_wsl2_install_state, _wsl2_install_state_lock)
+
+
+# 更新WSL安装状态
+def wslstset(**kwargs) -> None:
+    _stset(_wsl2_install_state, _wsl2_install_state_lock, kwargs)
+
+
+# 追加WSL安装日志
+def wslstlog(msg: str) -> None:
+    _stlog(_wsl2_install_state, _wsl2_install_state_lock, 500, msg)
 
 
 # 检查当前Windows管理员权限
@@ -183,48 +196,19 @@ def chkprt(host: str, port: int, tmout: float = 1.5) -> bool:
         return False
 
 
-# 规范化音频编码标签
-def nrmlcdclbl(raw_codec: Optional[str]) -> str:
-    value = (raw_codec or "").strip().lower()
-    if not value:
-        return "aac"
-    if "alac" in value:
-        return "alac"
-    if "atmos" in value or "dolby" in value or value in {"ec-3", "eac3", "ac-3", "ac3"}:
-        return "dolby"
-    if "aac" in value or "mp4a" in value:
-        return "aac"
-    return value
-
-
 # 读取Wrapper部署状态副本
 def wrprstcpy() -> Dict[str, Any]:
-    with _wrapper_setup_state_lock:
-        payload = dict(_wrapper_setup_state)
-        payload["logs"] = list(_wrapper_setup_state.get("logs", []))
-        return payload
+    return _stcpy(_wrapper_setup_state, _wrapper_setup_state_lock)
 
 
 # 更新Wrapper部署状态
 def wrprstset(**kwargs) -> None:
-    with _wrapper_setup_state_lock:
-        _wrapper_setup_state.update(kwargs)
-        _wrapper_setup_state["updated_at"] = time.time()
+    _stset(_wrapper_setup_state, _wrapper_setup_state_lock, kwargs)
 
 
 # 追加Wrapper部署日志
 def wrprstlog(msg: str) -> None:
-    text = (msg or "").strip()
-    if not text:
-        return
-    ts = time.strftime("%H:%M:%S")
-    line = f"[{ts}] {text}"
-    with _wrapper_setup_state_lock:
-        logs = _wrapper_setup_state.setdefault("logs", [])
-        logs.append(line)
-        if len(logs) > WRAPPER_STATE_MAX_LOGS:
-            del logs[: len(logs) - WRAPPER_STATE_MAX_LOGS]
-        _wrapper_setup_state["updated_at"] = time.time()
+    _stlog(_wrapper_setup_state, _wrapper_setup_state_lock, WRAPPER_STATE_MAX_LOGS, msg)
 
 
 # 设置全局Wrapper子进程
@@ -253,66 +237,5 @@ def wrprhlth() -> Dict[str, bool]:
     }
 
 
-# 规整化iTunes封面图占位模板
-def itnsarttmpl(url: str) -> str:
-    if not url:
-        return ""
-    return re.sub(r"/\d+x\d+bb\.(jpg|png|webp)$", r"/{w}x{h}bb.\1", url)
-
-
-# 生成文件名归一化比较键
-def fnmkey(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value or "")
-    normalized = normalized.casefold().strip()
-    return re.sub(r"\s+", " ", normalized)
-
-
-# 剥除曲目前缀序号字符
-def strptrkprfx(name: str) -> str:
-    return re.sub(r"^\s*\d{1,3}\s*[\-._)\]]?\s*", "", name).strip()
-
-
-# 查找伴随同名LRC歌词文件路径
-def fndsdcrlrc(audio_path: str, preferred_path: Optional[str] = None) -> Optional[str]:
-    audio_obj = Path(audio_path)
-    if not audio_obj.exists():
-        return None
-
-    if preferred_path:
-        try:
-            preferred_obj = Path(preferred_path)
-            if preferred_obj.exists() and preferred_obj.is_file():
-                return str(preferred_obj)
-        except Exception:
-            pass
-
-    for candidate in (audio_obj.with_suffix(".lrc"), audio_obj.with_suffix(".LRC")):
-        if candidate.exists() and candidate.is_file():
-            return str(candidate)
-
-    parent = audio_obj.parent
-    target_keys = {
-        fnmkey(audio_obj.stem),
-        fnmkey(strptrkprfx(audio_obj.stem)),
-    }
-    target_keys = {key for key in target_keys if key}
-
-    try:
-        lrc_files = [p for p in parent.iterdir() if p.is_file() and p.suffix.lower() == ".lrc"]
-    except Exception:
-        return None
-
-    for file in lrc_files:
-        if fnmkey(file.stem) in target_keys:
-            return str(file)
-
-    for file in lrc_files:
-        if fnmkey(strptrkprfx(file.stem)) in target_keys:
-            return str(file)
-
-    if len(lrc_files) == 1:
-        return str(lrc_files[0])
-
-    return None
 
 

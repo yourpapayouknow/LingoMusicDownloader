@@ -1,8 +1,8 @@
 # Apple Music与iTunes音乐目录检索、推荐与防抖缓存模块
 from backend.head import (
-    APIRouter, HTTPException, Query, Request, Response, BaseModel, Optional, List, Dict, Any,
+    APIRouter, HTTPException, Query, Request, Response, BaseModel, Field, Optional, List, Dict, Any,
     time, json, re, logging, asyncio, httpx, urlparse, parse_qs,
-    APPLE_MUSIC_SEARCH_API_URI
+    APPLE_MUSIC_SEARCH_API_URI, APPLE_MUSIC_AMP_API_URL
 )
 from backend.services.downloader import manager
 from backend.db.database import rprtsrch, gtrecmdtn
@@ -11,8 +11,8 @@ from backend.api.common import (
     FAST_SEARCH_TIMEOUT_SECONDS, FAST_SEARCH_DIRECT_TIMEOUT_SECONDS,
     ITUNES_SEARCH_TIMEOUT_SECONDS, SEARCH_CACHE_TTL_SECONDS,
     SEARCH_CACHE_STALE_SECONDS, SEARCH_CACHE_MAX_ENTRIES,
-    itnsarttmpl,
 )
+from backend.utils.common import itnsarttmpl
 
 # 日志记录器与路由器
 logger = logging.getLogger(__name__)
@@ -21,12 +21,11 @@ router = APIRouter()
 # 内部搜索缓存与并发去重结构
 _search_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
 _search_inflight: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
-_search_http_client: Optional[httpx.AsyncClient] = None
 
 
 # 请求模型定义
 class ReportSearchRequest(BaseModel):
-    keyword: str
+    keyword: str = Field(min_length=1, max_length=128)
 
 
 # 规整化Apple Music搜索响应分类字典
@@ -234,11 +233,7 @@ async def srchitnsfb(term: str, limit: int) -> Dict[str, Any]:
         )
 
     results: Dict[str, Dict[str, Any]] = {
-        "songs": {"data": []},
-        "albums": {"data": []},
-        "artists": {"data": []},
-        "music-videos": {"data": []},
-        "playlists": {"data": []},
+        category: {"data": []} for category in SEARCH_CATEGORY_KEYS
     }
     for (category, (_, converter)), payload in zip(entity_specs.items(), payloads):
         converted: List[Dict[str, Any]] = []
@@ -255,12 +250,11 @@ async def srchitnsfb(term: str, limit: int) -> Dict[str, Any]:
 
 # 直连Apple Music AMP API进行搜索
 async def srchdrct(term: str, limit: int) -> Dict[str, Any]:
-    global _search_http_client
     if not manager.apple_music_api:
         raise RuntimeError("Apple Music API is not initialized")
 
     api = manager.apple_music_api
-    uri = "https://amp-api.music.apple.com" + APPLE_MUSIC_SEARCH_API_URI.format(
+    uri = APPLE_MUSIC_AMP_API_URL + APPLE_MUSIC_SEARCH_API_URI.format(
         storefront=api.storefront
     )
     params = {
@@ -273,18 +267,13 @@ async def srchdrct(term: str, limit: int) -> Dict[str, Any]:
         params["l"] = api.language
     headers = dict(api.client.headers)
 
-    if _search_http_client is None or _search_http_client.is_closed:
-        _search_http_client = httpx.AsyncClient(
-            timeout=FAST_SEARCH_DIRECT_TIMEOUT_SECONDS,
-            headers=headers,
-        )
-    else:
-        _search_http_client.headers.clear()
-        _search_http_client.headers.update(headers)
-
-    response = await _search_http_client.get(uri, params=params)
-    response.raise_for_status()
-    payload = response.json()
+    async with httpx.AsyncClient(
+        timeout=FAST_SEARCH_DIRECT_TIMEOUT_SECONDS,
+        headers=headers,
+    ) as client:
+        response = await client.get(uri, params=params)
+        response.raise_for_status()
+        payload = response.json()
 
     if not isinstance(payload, dict):
         raise RuntimeError("Apple Music direct search returned invalid payload")
@@ -445,20 +434,12 @@ async def srchaplrtr(request: Request, term: str = Query(..., description="Searc
             raw_results = await srchfast(term=term)
             elapsed_ms = (time.perf_counter() - start_ts) * 1000
             try:
-                songs_count = len((raw_results.get("results", {}).get("songs", {}) or {}).get("data", []) or [])
-                mvs_count = len((raw_results.get("results", {}).get("music-videos", {}) or {}).get("data", []) or [])
-                albums_count = len((raw_results.get("results", {}).get("albums", {}) or {}).get("data", []) or [])
-                artists_count = len((raw_results.get("results", {}).get("artists", {}) or {}).get("data", []) or [])
-                other_count = len((raw_results.get("results", {}).get("playlists", {}) or {}).get("data", []) or [])
-                logger.info(
-                    "Apple Music search completed in %.1fms (songs=%s, albums=%s, artists=%s, mvs=%s, others=%s)",
-                    elapsed_ms,
-                    songs_count,
-                    albums_count,
-                    artists_count,
-                    mvs_count,
-                    other_count,
-                )
+                result_groups = raw_results.get("results", {}) or {}
+                counts = {
+                    category: len((result_groups.get(category, {}) or {}).get("data", []) or [])
+                    for category in SEARCH_CATEGORY_KEYS
+                }
+                logger.info("Apple Music search completed in %.1fms (%s)", elapsed_ms, counts)
             except Exception:
                 pass
             return {"success": True, "results": nrmlsrchrst(raw_results)}
@@ -473,14 +454,14 @@ async def srchaplrtr(request: Request, term: str = Query(..., description="Searc
 # 获取搜索热词推荐列表端点
 @router.get("/recommendations")
 async def gtrecmdrtr() -> Dict[str, Any]:
-    recs = gtrecmdtn(limit=10)
+    recs = await asyncio.to_thread(gtrecmdtn, 10)
     return {"success": True, "recommendations": recs}
 
 
 # 上报搜索热词记录端点
 @router.post("/recommendations/report")
 async def rprtsrchrtr(request: ReportSearchRequest):
-    rprtsrch(request.keyword)
+    await asyncio.to_thread(rprtsrch, request.keyword)
     return {"success": True}
 
 
