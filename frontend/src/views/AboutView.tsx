@@ -99,11 +99,9 @@ export function AbtVw({ store }: { store: AppStore }) {
           <Txt weight={700}>开源致谢</Txt>
           <VStk gap={0}>
             {LIBS.map((lib, index) => (
-              <HStk
+              <VStk
                 key={lib.name}
-                justify="space-between"
-                align="center"
-                gap="compact"
+                gap={2}
                 style={{
                   paddingBlock: '10px',
                   borderTop: index > 0
@@ -111,19 +109,19 @@ export function AbtVw({ store }: { store: AppStore }) {
                     : undefined,
                 }}
               >
-                <HStk gap="compact" align="center" style={{ minWidth: 0 }}>
+                <HStk justify="space-between" align="center" gap="compact">
                   <Txt weight={600} style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>{lib.name}</Txt>
-                  <Txt tone="secondary" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}>{lib.desc}</Txt>
+                  <IcBtn
+                    variant="ghost"
+                    size={28}
+                    onClick={() => opnext(lib.url, lib.name)}
+                    title="查看主页"
+                  >
+                    <Icn name="link" size={13} />
+                  </IcBtn>
                 </HStk>
-                <IcBtn
-                  variant="ghost"
-                  size={28}
-                  onClick={() => opnext(lib.url, lib.name)}
-                  title="查看主页"
-                >
-                  <Icn name="link" size={13} />
-                </IcBtn>
-              </HStk>
+                <Txt tone="secondary" style={{ fontSize: '0.76rem' }}>{lib.desc}</Txt>
+              </VStk>
             ))}
           </VStk>
         </VStk>
@@ -132,13 +130,15 @@ export function AbtVw({ store }: { store: AppStore }) {
       {/* 法律声明入口 */}
       <Crd style={{ border: '1px solid var(--system-error)', background: 'rgba(232, 17, 35, 0.03)' }}>
         <HStk justify="space-between" align="center" gap="normal">
-          <HStk gap="compact" align="center">
-            <Icn name="alert" size={18} style={{ color: 'var(--system-error)' }} />
-            <Txt weight={700} tone="error" style={{ whiteSpace: 'nowrap' }}>使用声明</Txt>
-            <Txt tone="secondary" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+          <VStk gap={2}>
+            <HStk gap="compact" align="center">
+              <Icn name="alert" size={18} style={{ color: 'var(--system-error)' }} />
+              <Txt weight={700} tone="error" style={{ whiteSpace: 'nowrap' }}>使用声明</Txt>
+            </HStk>
+            <Txt tone="secondary" style={{ fontSize: '0.78rem', paddingLeft: '26px' }}>
               仅供个人学习研究，禁止商业或侵权用途。
             </Txt>
-          </HStk>
+          </VStk>
           <Btn variant="ghost" size="sm" onClick={() => setLegalOpen(true)}>
             查看完整声明
           </Btn>

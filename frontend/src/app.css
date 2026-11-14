@@ -184,6 +184,9 @@ body {
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
+  /* MingCute字形视觉中心略高于盒子中心，统一下移1px做光学对齐 */
+  position: relative;
+  top: 1px;
 }
 
 .ui-avatar {
