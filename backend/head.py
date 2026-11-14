@@ -5,6 +5,7 @@ import sys
 import io
 import os
 import copy
+import argparse
 import multiprocessing as mp
 import logging
 import asyncio
@@ -61,6 +62,7 @@ __all__ = [
     "io",
     "os",
     "copy",
+    "argparse",
     "mp",
     "logging",
     "asyncio",
