@@ -8,12 +8,28 @@ import m3u8
 from yt_dlp import YoutubeDL
 
 from gamdl.api import ItunesApi
-from gamdl.interface import AppleMusicSongInterface, AppleMusicMusicVideoInterface
+from gamdl.downloader import (
+    AppleMusicBaseDownloader,
+    AppleMusicDownloader,
+    AppleMusicMusicVideoDownloader,
+    AppleMusicSongDownloader,
+    AppleMusicUploadedVideoDownloader,
+    DownloadMode,
+    GamdlDownloaderMediaFileExistsError,
+)
+from gamdl.interface import (
+    AppleMusicBaseInterface,
+    AppleMusicInterface,
+    AppleMusicMusicVideoInterface,
+    AppleMusicSongInterface,
+    AppleMusicUploadedVideoInterface,
+    GamdlInterfaceDecryptionNotAvailableError,
+    GamdlInterfaceFormatNotAvailableError,
+    MusicVideoResolution,
+)
 from gamdl.interface.constants import MP4_FORMAT_CODECS
-from gamdl.interface.enums import MediaFileFormat
+from gamdl.interface.enums import MediaFileFormat, SongCodec
 from gamdl.interface.types import StreamInfo, StreamInfoAv
-from gamdl.downloader import AppleMusicBaseDownloader
-from gamdl.interface.enums import SongCodec
 
 from backend.head import (
     asyncio, re, tempfile, Path, Dict, Any, Optional, List,
@@ -27,6 +43,34 @@ from backend.services.downloader import (
     _align_tags_with_catalog,
     _fill_missing_tags_from_catalog,
 )
+
+# downloader通过rt.*访问的gamdl公开契约（新增依赖名时必须同步维护）
+__all__ = [
+    "AppleMusicBaseDownloader",
+    "AppleMusicBaseInterface",
+    "AppleMusicDownloader",
+    "AppleMusicInterface",
+    "AppleMusicMusicVideoDownloader",
+    "AppleMusicMusicVideoInterface",
+    "AppleMusicSongDownloader",
+    "AppleMusicSongInterface",
+    "AppleMusicUploadedVideoDownloader",
+    "AppleMusicUploadedVideoInterface",
+    "DownloadMode",
+    "GamdlDownloaderMediaFileExistsError",
+    "GamdlInterfaceDecryptionNotAvailableError",
+    "GamdlInterfaceFormatNotAvailableError",
+    "ItunesApi",
+    "MediaFileFormat",
+    "MP4_FORMAT_CODECS",
+    "MusicVideoResolution",
+    "SongCodec",
+    "StreamInfo",
+    "StreamInfoAv",
+    "LingoAppleMusicBaseDownloader",
+    "LingoAppleMusicSongInterface",
+    "LingoAppleMusicMusicVideoInterface",
+]
 
 logger = logging.getLogger(__name__)
 
