@@ -102,7 +102,7 @@ export function AbtVw({ store }: { store: AppStore }) {
               {index > 0 && <Dvd />}
               <HStk justify="space-between" align="center" gap="compact">
                 <VStk gap={2} style={{ minWidth: 0 }}>
-                  <Txt weight={600} style={{ fontSize: '0.84rem' }}>{lib.name}</Txt>
+                  <Txt weight={600} style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>{lib.name}</Txt>
                   <Txt tone="secondary" style={{ fontSize: '0.74rem' }}>{lib.desc}</Txt>
                 </VStk>
                 <IcBtn
