@@ -31,7 +31,8 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urljoin, urlunparse
 from urllib.request import Request as UrlRequest, urlopen
 from http.cookiejar import MozillaCookieJar
-from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
+from contextlib import contextmanager, asynccontextmanager
+from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, Literal
 
 # main.py | routes.py
 import uvicorn
@@ -77,12 +78,20 @@ __all__ = [
     "subprocess",
     "shlex",
     "unicodedata",
+    "getpass",
     "urllib",
     "zipfile",
     "traceback",
     "Path",
     "urlparse",
     "parse_qs",
+    "urljoin",
+    "urlunparse",
+    "UrlRequest",
+    "urlopen",
+    "MozillaCookieJar",
+    "contextmanager",
+    "asynccontextmanager",
     "List",
     "Dict",
     "Any",
@@ -91,6 +100,7 @@ __all__ = [
     "Set",
     "Union",
     "Callable",
+    "Literal",
     "uvicorn",
     "httpx",
     "APIRouter",
@@ -106,4 +116,11 @@ __all__ = [
     "BaseModel",
     "Field",
     "BaseSettings",
+    "Retry",
+    "RetryTransport",
+    "APPLE_MUSIC_SEARCH_API_URI",
+    "APPLE_MUSIC_AMP_API_URL",
+    "GamdlApiResponseError",
+    "AppleMusicApi",
+    "ItunesApi",
 ]

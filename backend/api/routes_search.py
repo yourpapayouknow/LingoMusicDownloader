@@ -484,11 +484,3 @@ async def rprtsrchrtr(request: ReportSearchRequest):
     return {"success": True}
 
 
-# 兼容性别名
-search_apple_music_head = srchhd
-search_apple_music = srchaplrtr
-api_get_recommendations = gtrecmdrtr
-api_report_search = rprtsrchrtr
-parse_apple_music_url = prsaplurl
-_normalize_search_results = nrmlsrchrst
-_search_catalog_fast = srchfast

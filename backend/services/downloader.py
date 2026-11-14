@@ -8,7 +8,7 @@ from backend.head import (
     AppleMusicApi, ItunesApi,
 )
 
-from backend.db.database import inshstry as insert_history, gtallstngs as get_all_settings, insdwnldtsk as insert_download_task
+from backend.db.database import inshstry as insert_history, gtallstngs as get_all_settings
 from backend.api.common import (
     itnsarttmpl as _itunes_artwork_template,
     nrmlcdclbl as _normalize_codec_label,
@@ -682,7 +682,7 @@ def _setting_enabled(value: Any) -> bool:
 
 # 定位可用的FFmpeg可执行文件路径
 def _resolve_ffmpeg_path() -> str:
-    configured = settings.FFMPEG_PATH
+    configured = settings.ffmpgpth()
     if configured and os.path.exists(configured):
         return configured
 
@@ -700,7 +700,7 @@ def _resolve_ffprobe_path(ffmpeg_path: str) -> Optional[str]:
     if sibling.exists():
         return str(sibling)
 
-    bin_candidate = Path(settings.BIN_DIR) / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
+    bin_candidate = Path(settings.bindir()) / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
     if bin_candidate.exists():
         return str(bin_candidate)
 
@@ -803,8 +803,8 @@ def _has_transcode_enabled(all_settings: Dict[str, Any]) -> bool:
 # 构造转码产物在目标目录的绝对路径
 def _build_converted_output_path(source_file_path: str, ext: str) -> Path:
     source_path = Path(source_file_path).resolve()
-    download_root = Path(settings.OUTPUT_PATH).resolve()
-    converted_root = Path(settings.CONVERTED_PATH).resolve()
+    download_root = Path(settings.outpth()).resolve()
+    converted_root = Path(settings.cnvtpth()).resolve()
 
     try:
         relative_parent = source_path.parent.relative_to(download_root)
@@ -959,8 +959,8 @@ class DownloadManager:
 
     # 初始化Apple Music下载引擎及鉴权客户端
     async def initialize(self):
-        if not os.path.exists(settings.COOKIES_PATH):
-            logger.error(f"Cookies file not found at {settings.COOKIES_PATH}")
+        if not os.path.exists(settings.ckspth()):
+            logger.error(f"Cookies file not found at {settings.ckspth()}")
             return False
 
         self.apple_music_api = None
@@ -970,7 +970,7 @@ class DownloadManager:
         await ensure_wsl_bridge()
 
         try:
-            media_user_token = _load_media_user_token_from_cookies(settings.COOKIES_PATH)
+            media_user_token = _load_media_user_token_from_cookies(settings.ckspth())
             candidate_tokens = await _fetch_apple_music_access_tokens()
 
             init_errors: List[str] = []
@@ -1113,10 +1113,10 @@ class DownloadManager:
 
         base_downloader = rt.LingoAppleMusicBaseDownloader(
             interface=interface,
-            output_path=settings.OUTPUT_PATH,
+            output_path=settings.outpth(),
             nm3u8dlre_path=nm3u8_binary or "N_m3u8DL-RE",
-            mp4decrypt_path=settings.MP4DECRYPT_PATH,
-            ffmpeg_path=settings.FFMPEG_PATH,
+            mp4decrypt_path=settings.mp4dcrpth(),
+            ffmpeg_path=settings.ffmpgpth(),
             download_mode=download_mode,
         )
 
@@ -1325,23 +1325,11 @@ class DownloadManager:
                 except Exception:
                     pass
 
-    # 任务终态落盘SQLite并裁剪内存状态字典
+    # 裁剪内存状态字典，仅保留最近任务
     def _finalprcstts(self, url: str) -> None:
         task = self.download_status.get(url)
         if not task:
             return
-        try:
-            insert_download_task({
-                "url": url,
-                "status": task.get("status", ""),
-                "codec": task.get("codec", ""),
-                "resolution": task.get("resolution", ""),
-                "items_json": json.dumps(task.get("items", []), ensure_ascii=False),
-                "error": task.get("error", ""),
-                "file_path": task.get("file_path", ""),
-            })
-        except Exception as e:
-            logger.error("Failed to persist download task snapshot: %s", e)
 
         # 内存只保留最近DOWNLOAD_STATUS_MAX条任务，防止单会话无限累积
         try:

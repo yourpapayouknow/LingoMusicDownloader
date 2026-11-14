@@ -538,9 +538,3 @@ async def fnlcklgn(request: CookieLoginFinalizeRequest):
     }
 
 
-# 兼容性别名
-save_cookies = svcksrtr
-probe_cookie_login = prbcklgn
-finalize_cookie_login = fnlcklgn
-_initialize_manager_with_retry = intmngrrtr
-_export_apple_music_cookies_from_webview = exptaplcks

@@ -94,9 +94,3 @@ async def hlthchkrtr() -> Dict[str, Any]:
         return payload
 
 
-# 兼容性别名
-api_get_settings = gtstngsrtr
-api_save_settings = svstngsrtr
-api_get_history = gthstryrtr
-api_delete_history = dlthstryrtr
-health_check = hlthchkrtr

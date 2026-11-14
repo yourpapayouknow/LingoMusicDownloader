@@ -553,13 +553,3 @@ async def scnlcllbrtr():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 兼容性别名
-start_download = strtdwnld
-get_status = gtdwnldstts
-stream_local_audio = strmlclad
-get_local_artwork = gtlchart
-get_local_lyrics = gtlcllrc
-open_download_folder = opndwnldfldr
-open_converted_folder = opncnvtfldr
-scan_local_library = scnlcllbrtr
-_scan_local_library_impl = scnlcllb

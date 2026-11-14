@@ -316,22 +316,3 @@ def fndsdcrlrc(audio_path: str, preferred_path: Optional[str] = None) -> Optiona
     return None
 
 
-# 兼容性别名映射
-_ps_single_quote = pssqt
-_wsl2_copy_state = wslstcpy
-_wsl2_set_state = wslstset
-_wsl2_append_log = wslstlog
-_is_windows_admin = isadmin
-_get_drive_free_gb = gtfrgb
-_run_capture = rncptr
-_check_port = chkprt
-_normalize_codec_label = nrmlcdclbl
-_wrapper_copy_state = wrprstcpy
-_wrapper_set_state = wrprstset
-_wrapper_append_log = wrprstlog
-_set_wrapper_process = setwrprprc
-_get_wrapper_process = gtwrprprc
-_get_wrapper_runtime_health = wrprhlth
-_filename_key = fnmkey
-_strip_track_prefix = strptrkprfx
-_find_sidecar_lrc_path = fndsdcrlrc

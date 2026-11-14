@@ -810,13 +810,3 @@ async def sbmtwrprintrtr(request: WrapperSetupInputRequest):
     return {"success": False, "status": "error", "message": "未知的输入类型。"}
 
 
-# 兼容性别名
-wrapper_setup_precheck = wrprprchkrtr
-start_wrapper_setup = strtwrprrtr
-get_wrapper_setup_status = gtwrprsttsrtr
-submit_wrapper_setup_input = sbmtwrprintrtr
-_is_wrapper_installed = iswrprinst
-_is_wrapper_running = iswrprrun
-_build_wrapper_precheck = bldwrprprchk
-_stop_wrapper_service = stpwrprsrv
-_ensure_wrapper_installed = ensrwrprinst

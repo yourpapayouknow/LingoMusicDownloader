@@ -1,4 +1,5 @@
 # 后端守护进程启动与全局异常捕获入口脚本
+# 引导期例外：必须在导入backend.head前修正标准输出与sys.path
 import sys
 import io
 import os
@@ -25,7 +26,9 @@ if __name__ == "__main__":
             sys._base_executable = sys.executable
         mp.set_executable(sys.executable)
     except Exception:
-        pass
+        # 多进程初始化失败时记录告警，主进程继续运行
+        traceback.print_exc()
+        print("[WARN] multiprocessing executable configuration failed.", file=sys.stderr)
 
     print("Starting LingoMusic Downloader Backend...")
     crash_log_path = os.path.join(project_root, "backend_crash.log")

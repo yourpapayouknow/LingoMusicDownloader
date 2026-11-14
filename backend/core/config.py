@@ -56,46 +56,5 @@ class Settings(BaseSettings):
     def mp4dcrpth(self) -> str:
         return os.path.join(self.bindir(), "mp4decrypt.exe")
 
-    # 属性映射适配
-    # 根目录兼容属性
-    @property
-    def BASE_DIR(self) -> str:
-        return self.bsdir()
-
-    # 应用打包目录兼容属性
-    @property
-    def BUNDLE_DIR(self) -> str:
-        return self.bndldir()
-
-    # Cookies文件路径兼容属性
-    @property
-    def COOKIES_PATH(self) -> str:
-        return self.ckspth()
-
-    # 输出目录兼容属性
-    @property
-    def OUTPUT_PATH(self) -> str:
-        return self.outpth()
-
-    # 转换目录兼容属性
-    @property
-    def CONVERTED_PATH(self) -> str:
-        return self.cnvtpth()
-
-    # 二进制工具目录兼容属性
-    @property
-    def BIN_DIR(self) -> str:
-        return self.bindir()
-
-    # FFmpeg路径兼容属性
-    @property
-    def FFMPEG_PATH(self) -> str:
-        return self.ffmpgpth()
-
-    # mp4decrypt路径兼容属性
-    @property
-    def MP4DECRYPT_PATH(self) -> str:
-        return self.mp4dcrpth()
-
 
 settings = Settings()

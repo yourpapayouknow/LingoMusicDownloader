@@ -594,10 +594,3 @@ async def gtwslsttsrtr():
     return {"success": True, **state}
 
 
-# 兼容性别名
-wsl2_install_precheck = wslprchkrtr
-start_wsl2_install = strtwslrtr
-get_wsl2_install_status = gtwslsttsrtr
-_detect_wsl2_installed = dtctwsl
-_build_wsl2_precheck = bldwslprchk
-_wsl2_install_worker = wslinstwrkr
