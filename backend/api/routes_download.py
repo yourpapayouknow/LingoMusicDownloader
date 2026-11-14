@@ -4,6 +4,7 @@ from backend.head import (
     Optional, Literal, Dict, Any, os, subprocess, Path, logging, asyncio
 )
 from backend.services.downloader import manager
+from backend.services.storage import knownroots
 from backend.services.local_library import (
     dtctlclcdc, dcdplbckpth, shlddcdweb, rdtxtflbck, rzsccovrcch, scnlcllb
 )
@@ -33,9 +34,9 @@ class OpenFolderRequest(BaseModel):
 
 # 校验目录打开请求并限定在下载/转换目录内
 def vldopnptr(raw_path: Optional[str]) -> Path:
-    roots = [Path(settings.outpth()).resolve(), Path(settings.cnvtpth()).resolve()]
+    roots = [Path(item).resolve() for item in knownroots()]
     if not raw_path:
-        return roots[0]
+        return Path(settings.outpth()).resolve()
     try:
         resolved = Path(raw_path).expanduser().resolve(strict=False)
     except OSError as exc:

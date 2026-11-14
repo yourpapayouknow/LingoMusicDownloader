@@ -85,7 +85,7 @@ export function SetVw({ store }: { store: AppStore }) {
             <Txt weight={700} style={{ fontSize: '0.8rem' }}>
               WSL2: {wslInstallStatusData?.running ? '运行中' : wslInstallStatusData?.completed ? (wslInstallStatusData.success_flag ? '已完成' : '失败') : '空闲'}
               {' · '}
-              Wrapper: {wrapperSetupStatusData?.awaiting_input ? '等待输入' : wrapperSetupStatusData?.running ? '运行中' : wrapperSetupStatusData?.completed ? (wrapperSetupStatusData.success_flag ? '已完成' : '失败') : '空闲'}
+              解密组件: {wrapperSetupStatusData?.awaiting_input ? '等待输入' : wrapperSetupStatusData?.running ? '运行中' : wrapperSetupStatusData?.completed ? (wrapperSetupStatusData.success_flag ? '已完成' : '失败') : '空闲'}
             </Txt>
           </VStk>
           <HStk gap="compact">
@@ -121,10 +121,10 @@ export function SetVw({ store }: { store: AppStore }) {
         <HStk justify="space-between" align="center" style={{ flexWrap: 'wrap', gap: '10px' }}>
           <HStk gap="compact" align="center" style={{ flexWrap: 'wrap' }}>
             <Bdg tone={initCookieConfigured ? 'success' : 'error'}>
-              Cookies: {initCookieConfigured ? '已配置' : '未配置'}
+              授权: {initCookieConfigured ? '已配置' : '未配置'}
             </Bdg>
             <Bdg tone={initWrapperConfigured ? 'success' : 'default'}>
-              Wrapper: {initWrapperConfigured ? '已配置' : '未配置'}
+              解密组件: {initWrapperConfigured ? '已配置' : '未配置'}
             </Bdg>
             <Bdg tone={skipWrapperAutostart ? 'default' : 'info'}>
               自启: {skipWrapperAutostart ? '已跳过' : '默认开启'}

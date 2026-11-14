@@ -23,6 +23,9 @@ class StorageTests(unittest.TestCase):
                 self.assertEqual(settings.cnvtpth(), str(converted_dir.resolve()))
                 self.assertTrue(download_dir.is_dir())
                 self.assertTrue(converted_dir.is_dir())
+                roots = storage.knownroots()
+                self.assertIn(str(download_dir.resolve()), roots)
+                self.assertIn(str((Path(tempdir) / "Apple Music").resolve()), roots)
 
                 reset_result = storage.rstpaths()
                 self.assertEqual(reset_result["download_dir"], str(Path(tempdir) / "Apple Music"))

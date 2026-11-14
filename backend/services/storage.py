@@ -29,6 +29,26 @@ def vlddir(raw: str) -> str:
     return str(resolved)
 
 
+# 读取允许访问的目录集合（含当前、默认与历史配置）
+def knownroots() -> list[str]:
+    base = Path(settings.bsdir())
+    roots = {
+        str(Path(settings.outpth()).resolve()),
+        str(Path(settings.cnvtpth()).resolve()),
+        str((base / "Apple Music").resolve()),
+        str((base / "Converted").resolve()),
+    }
+    try:
+        payload = json.loads(cfgpth().read_text(encoding="utf-8"))
+        for item in payload.get("known_dirs", []):
+            value = str(item or "").strip()
+            if value:
+                roots.add(str(Path(value).expanduser().resolve()))
+    except Exception:
+        pass
+    return sorted(roots)
+
+
 # 读取当前存储路径
 def gtpaths() -> Dict[str, Any]:
     base = Path(settings.bsdir())
@@ -51,11 +71,22 @@ def svpaths(download_dir: str, converted_dir: str) -> Dict[str, Any]:
        os.path.normcase(cv_path).startswith(os.path.normcase(dl_path) + os.sep):
         raise ValueError("下载目录与转换目录不能互相嵌套")
 
+    known_dirs = set(knownroots())
+    known_dirs.update({dl_path, cv_path})
+
     config_path = cfgpth()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = config_path.with_suffix(".tmp")
     tmp_path.write_text(
-        json.dumps({"download_dir": dl_path, "converted_dir": cv_path}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {
+                "download_dir": dl_path,
+                "converted_dir": cv_path,
+                "known_dirs": sorted(known_dirs),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     tmp_path.replace(config_path)

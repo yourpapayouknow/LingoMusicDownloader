@@ -71,7 +71,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                       WSL2: {wrapperSetupPrecheck?.wsl2_installed ? '已安装' : '未安装'}
                     </Bdg>
                     <Bdg tone={wrapperSetupPrecheck?.wrapper_installed ? 'success' : 'default'}>
-                      Wrapper: {wrapperSetupPrecheck?.wrapper_installed ? '已安装' : '未安装'}
+                      解密组件: {wrapperSetupPrecheck?.wrapper_installed ? '已安装' : '未安装'}
                     </Bdg>
                     <Bdg tone={wrapperSetupPrecheck?.wrapper_running ? 'success' : 'error'}>
                       服务: {wrapperSetupPrecheck?.wrapper_running ? '运行中' : '未运行'}
