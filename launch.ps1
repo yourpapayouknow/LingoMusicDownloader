@@ -240,6 +240,8 @@ function Ensure-LegacyPythonEnv {
         }
 
         $syncTarget = if (Test-Path $PyprojectFile) { $PyprojectFile } else { $RequirementsFile }
+        # 以uv.lock为依赖同步基准（uv sync依据pyproject/uv.lock）
+        $syncTarget = Join-Path $ProjectDir "uv.lock"
         $currentHash = (Get-FileHash -Algorithm SHA256 $syncTarget).Hash
         $storedHash = if (Test-Path $RequirementsStamp) {
             (Get-Content $RequirementsStamp -ErrorAction SilentlyContinue | Select-Object -First 1)

@@ -77,3 +77,4 @@ backend/wsl_wrapper/*
 # Local session artifacts
 history/
 startclaude.ps1
+launchclaude*.ps1
