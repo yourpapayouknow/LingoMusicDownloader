@@ -1,7 +1,7 @@
 # Apple Music与iTunes音乐目录检索、推荐与防抖缓存模块
 from backend.head import (
     APIRouter, HTTPException, Query, Request, Response, BaseModel, Field, Optional, List, Dict, Any,
-    time, json, re, logging, asyncio, httpx, urlparse, parse_qs,
+    time, re, logging, asyncio, httpx, urlparse, parse_qs,
     APPLE_MUSIC_SEARCH_API_URI, APPLE_MUSIC_AMP_API_URL
 )
 from backend.services.downloader import manager
@@ -391,7 +391,7 @@ async def srchhd():
 # 音乐与媒体目录搜索端点
 @router.get("/search")
 async def srchaplrtr(request: Request, term: str = Query(..., description="Search term")):
-    if not await manager.ensure_initialized():
+    if not await manager.ensinit():
         raise HTTPException(status_code=500, detail="Downloader not initialized.")
 
     try:

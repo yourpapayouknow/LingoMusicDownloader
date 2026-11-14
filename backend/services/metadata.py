@@ -50,7 +50,7 @@ GENERIC_GENRE_NAMES = {"music", "音乐", "音樂", "ミュージック", "음�
 
 
 # 将BCP-47语言标签规整为Apple Music与iTunes兼容格式
-def _normalize_itunes_language_tag(tag: Optional[str]) -> str:
+def _nrmitlng(tag: Optional[str]) -> str:
     raw = (tag or "").strip().replace("_", "-")
     if not raw:
         return "en-US"
@@ -71,13 +71,13 @@ def _normalize_itunes_language_tag(tag: Optional[str]) -> str:
 
 
 # 按Storefront代号同步解析默认元数据语言
-def _resolve_storefront_language_sync(storefront: Optional[str]) -> str:
+def _rsvsflgs(storefront: Optional[str]) -> str:
     sf = (storefront or "").strip().lower()
     return APPLE_STOREFRONT_LANGUAGE_MAP.get(sf, "en-US")
 
 
 # 异步探测并确定账户Storefront对应的元数据语言
-async def _resolve_storefront_language(
+async def _rsvsflng(
     storefront: Optional[str],
     token: Optional[str] = None,
     media_user_token: Optional[str] = None,
@@ -106,15 +106,15 @@ async def _resolve_storefront_language(
                     if data and isinstance(data[0], dict):
                         default_lang = data[0].get("attributes", {}).get("defaultLanguageTag")
                         if default_lang:
-                            return _normalize_itunes_language_tag(default_lang)
+                            return _nrmitlng(default_lang)
         except Exception as e:
             logger.debug("Storefront language lookup failed for %s: %s", sf, e)
 
-    return _resolve_storefront_language_sync(sf)
+    return _rsvsflgs(sf)
 
 
 # 解析最终生效的元数据区域与语言标签
-async def _resolve_target_metadata_region_and_language(
+async def _rsvtgtln(
     account_storefront: Optional[str],
     requested_region: Optional[str],
     token: Optional[str] = None,
@@ -123,7 +123,7 @@ async def _resolve_target_metadata_region_and_language(
     raw_region = (requested_region or "").strip().lower()
     base_sf = (account_storefront or "cn").strip().lower() or "cn"
     target_sf = base_sf if (not raw_region or raw_region == "auto") else raw_region
-    target_lang = await _resolve_storefront_language(
+    target_lang = await _rsvsflng(
         target_sf,
         token=token,
         media_user_token=media_user_token,
@@ -132,7 +132,7 @@ async def _resolve_target_metadata_region_and_language(
 
 
 # 拉取指定Storefront区域下的目录媒体元数据
-async def _fetch_catalog_metadata_for_storefront(
+async def _ftccatmd(
     apple_music_api: Any,
     media_type: str,
     media_id: str,
@@ -161,7 +161,7 @@ async def _fetch_catalog_metadata_for_storefront(
 
 
 # 从目录属性提取首选非泛化流派名称
-def _pick_catalog_genre(genre_names: Any) -> Optional[str]:
+def _pckgnr(genre_names: Any) -> Optional[str]:
     if not isinstance(genre_names, list):
         return None
     cleaned = [str(g).strip() for g in genre_names if isinstance(g, str) and g.strip()]
@@ -172,7 +172,7 @@ def _pick_catalog_genre(genre_names: Any) -> Optional[str]:
 
 
 # 判断流媒体标签是否应替换为目标区域目录本地化文本
-def _should_use_catalog_text(
+def _shdcattx(
     tag_value: Optional[str],
     catalog_value: Optional[str],
     storefront: Optional[str],
@@ -198,7 +198,7 @@ def _should_use_catalog_text(
 
 
 # 仅填补缺失或为空的元数据标签字段
-def _fill_missing_tags_from_catalog(
+def _flmstgt(
     tags: Any,
     media_metadata: Optional[Dict[str, Any]],
 ) -> None:
@@ -216,13 +216,13 @@ def _fill_missing_tags_from_catalog(
     if not (getattr(tags, "album_artist", None) or "").strip() and attrs.get("albumArtistName"):
         tags.album_artist = attrs["albumArtistName"]
     if not (getattr(tags, "genre", None) or "").strip():
-        cat_genre = _pick_catalog_genre(attrs.get("genreNames"))
+        cat_genre = _pckgnr(attrs.get("genreNames"))
         if cat_genre:
             tags.genre = cat_genre
 
 
 # 使用账户区Apple Music目录元数据兜底对齐标签
-def _align_tags_with_catalog(
+def _algntag(
     tags: Any,
     media_metadata: Optional[Dict[str, Any]],
     storefront: Optional[str],
@@ -234,27 +234,27 @@ def _align_tags_with_catalog(
         return
 
     cat_title = attrs.get("name")
-    if _should_use_catalog_text(getattr(tags, "title", None), cat_title, storefront):
+    if _shdcattx(getattr(tags, "title", None), cat_title, storefront):
         tags.title = cat_title
         if hasattr(tags, "title_sort"):
             tags.title_sort = cat_title
 
     cat_artist = attrs.get("artistName")
-    if _should_use_catalog_text(getattr(tags, "artist", None), cat_artist, storefront):
+    if _shdcattx(getattr(tags, "artist", None), cat_artist, storefront):
         tags.artist = cat_artist
         if hasattr(tags, "artist_sort"):
             tags.artist_sort = cat_artist
 
     cat_album = attrs.get("albumName")
-    if _should_use_catalog_text(getattr(tags, "album", None), cat_album, storefront):
+    if _shdcattx(getattr(tags, "album", None), cat_album, storefront):
         tags.album = cat_album
         if hasattr(tags, "album_sort"):
             tags.album_sort = cat_album
 
     cat_album_artist = attrs.get("albumArtistName")
-    if _should_use_catalog_text(getattr(tags, "album_artist", None), cat_album_artist, storefront):
+    if _shdcattx(getattr(tags, "album_artist", None), cat_album_artist, storefront):
         tags.album_artist = cat_album_artist
 
-    cat_genre = _pick_catalog_genre(attrs.get("genreNames"))
-    if _should_use_catalog_text(getattr(tags, "genre", None), cat_genre, storefront):
+    cat_genre = _pckgnr(attrs.get("genreNames"))
+    if _shdcattx(getattr(tags, "genre", None), cat_genre, storefront):
         tags.genre = cat_genre

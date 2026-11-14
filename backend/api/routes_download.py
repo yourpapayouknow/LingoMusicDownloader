@@ -71,7 +71,7 @@ def gttrckfl(track_id: str) -> Dict[str, Any]:
 # 提交单曲或专辑下载任务端点
 @router.post("/download")
 async def strtdwnld(request: DownloadRequest):
-    if not await manager.ensure_initialized():
+    if not await manager.ensinit():
         raise HTTPException(
             status_code=500,
             detail="Downloader not initialized. Please ensure cookies.txt is provided and valid."
@@ -98,7 +98,7 @@ async def strtdwnld(request: DownloadRequest):
                 ),
             )
 
-    added = await manager.add_to_queue(
+    added = await manager.adque(
         request.url,
         codec=normalized_codec,
         video_resolution=request.video_resolution,

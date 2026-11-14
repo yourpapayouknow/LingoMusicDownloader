@@ -1,9 +1,8 @@
 # 共享常量、工具辅助函数与状态模型模块
 from backend.head import (
-    os, sys, time, socket, subprocess, threading, ctypes,
-    logging, shutil, List, Dict, Any, Optional, Tuple, Path, re, unicodedata
+    os, time, socket, subprocess, threading, ctypes,
+    logging, shutil, List, Dict, Any, Optional, Tuple, Path
 )
-from backend.core.config import settings
 
 # 日志记录器
 logger = logging.getLogger(__name__)

@@ -447,7 +447,7 @@ async def intmngrrtr(
     delay_seconds: float = COOKIE_INIT_RETRY_DELAY_SECONDS,
 ) -> bool:
     for index in range(max(1, attempts)):
-        ok = await manager.ensure_initialized()
+        ok = await manager.ensinit()
         if ok:
             return True
         if index < attempts - 1:

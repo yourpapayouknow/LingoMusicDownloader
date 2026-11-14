@@ -39,9 +39,9 @@ from backend.head import (
 # 复用独立的元数据服务（避免反向依赖downloader）
 from backend.services.metadata import (
     AUDIO_FORMAT_ID_BY_CODEC,
-    _fetch_catalog_metadata_for_storefront,
-    _align_tags_with_catalog,
-    _fill_missing_tags_from_catalog,
+    _ftccatmd,
+    _algntag,
+    _flmstgt,
 )
 
 # downloader通过rt.*访问的gamdl公开契约（新增依赖名时必须同步维护）
@@ -84,7 +84,7 @@ async def _mtalgn(iface, item: Any, media_type: str) -> None:
     target_lang = iface._metadata_language or getattr(iface.base.apple_music_api, "language", "en-US")
     if target_sf and target_sf != account_sf:
         catalog_id = iface.base.parse_catalog_media_id(item.media_metadata)
-        target_meta = await _fetch_catalog_metadata_for_storefront(
+        target_meta = await _ftccatmd(
             iface.base.apple_music_api,
             media_type,
             catalog_id,
@@ -92,11 +92,11 @@ async def _mtalgn(iface, item: Any, media_type: str) -> None:
             target_lang,
         )
         if target_meta:
-            _align_tags_with_catalog(item.tags, target_meta, target_sf)
+            _algntag(item.tags, target_meta, target_sf)
         else:
-            _fill_missing_tags_from_catalog(item.tags, item.media_metadata)
+            _flmstgt(item.tags, item.media_metadata)
     else:
-        _align_tags_with_catalog(item.tags, item.media_metadata, target_sf)
+        _algntag(item.tags, item.media_metadata, target_sf)
 
 
 class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
@@ -120,13 +120,13 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
         if stream_url and ".m3u8" in stream_url.lower():
             try:
                 patched_m3u8_path = await asyncio.to_thread(
-                    self._create_query_inherited_m3u8,
+                    self._crtqm3u8,
                     stream_url,
                     download_path,
                 )
                 if patched_m3u8_path:
                     await asyncio.to_thread(
-                        self._download_ytdlp_from_local_m3u8,
+                        self._dlytm3u8,
                         patched_m3u8_path,
                         download_path,
                     )
@@ -147,7 +147,7 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
         await super().download_stream(stream_url, download_path)
 
     # 生成继承父级鉴权Query参数的本地临时m3u8
-    def _create_query_inherited_m3u8(self, stream_url: str, download_path: str) -> Optional[Path]:
+    def _crtqm3u8(self, stream_url: str, download_path: str) -> Optional[Path]:
         parsed = urlparse(stream_url)
         query = parsed.query
         host = (parsed.netloc or "").lower()
@@ -162,7 +162,7 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
             return None
 
         # 补齐相对路径并继承URL参数
-        def _absolutize_and_inherit(uri_text: str) -> str:
+        def _absinh(uri_text: str) -> str:
             absolute = urljoin(stream_url, uri_text)
             uri_parts = urlparse(absolute)
             if uri_parts.query:
@@ -182,7 +182,7 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
                 match = re.search(r'URI="([^"]+)"', line)
                 if match:
                     old_uri = match.group(1)
-                    new_uri = _absolutize_and_inherit(old_uri)
+                    new_uri = _absinh(old_uri)
                     if new_uri != old_uri:
                         line = line.replace(old_uri, new_uri, 1)
                         changed_count += 1
@@ -193,7 +193,7 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
                 patched_lines.append(line)
                 continue
 
-            new_uri = _absolutize_and_inherit(line)
+            new_uri = _absinh(line)
             if new_uri != line:
                 changed_count += 1
             patched_lines.append(new_uri)
@@ -216,7 +216,7 @@ class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
         return Path(tmp.name)
 
     # 调用yt-dlp从本地修复后的m3u8执行分片下载
-    def _download_ytdlp_from_local_m3u8(self, m3u8_path: Path, download_path: str) -> None:
+    def _dlytm3u8(self, m3u8_path: Path, download_path: str) -> None:
         with YoutubeDL(
             {
                 "quiet": True,
@@ -255,7 +255,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
 
     # 解析HLS音频资产元数据与变体流映射关系
     @staticmethod
-    def _resolve_asset_metadata(
+    def _rsvamd(
         asset_metadata: Dict[str, Any],
         playlist: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
@@ -293,7 +293,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
         return None
 
     # 获取音频流信息并解析DRM鉴权参数
-    async def _get_stream_info(
+    async def _gtsinfo(
         self,
         song_metadata: dict,
         codec: SongCodec,
@@ -343,7 +343,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
 
         if session_key_metadata:
             asset_metadata = self._get_asset_metadata(m3u8_master_data)
-            asset_entry = self._resolve_asset_metadata(asset_metadata, playlist)
+            asset_entry = self._rsvamd(asset_metadata, playlist)
             if asset_entry is None:
                 raise KeyError(
                     "No audio asset metadata matches variant: "

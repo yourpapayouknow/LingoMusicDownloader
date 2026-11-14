@@ -12,16 +12,14 @@ from backend.db.database import inshstry as insert_history, gtallstngs as get_al
 from backend.utils.common import (
     itnsarttmpl as _itunes_artwork_template,
     nrmlcdclbl as _normalize_codec_label,
-    fnmkey as _filename_key,
-    strptrkprfx as _strip_track_prefix,
     fndsdcrlrc as _find_sidecar_lrc_path,
 )
 from backend.services.metadata import (
     APPLE_MUSIC_HOMEPAGE_URL,
-    _normalize_itunes_language_tag,
-    _resolve_storefront_language_sync,
-    _resolve_storefront_language,
-    _resolve_target_metadata_region_and_language,
+    _nrmitlng,
+    _rsvsflgs,
+    _rsvsflng,
+    _rsvtgtln,
 )
 
 from backend.core.config import settings
@@ -134,7 +132,7 @@ APPLE_STOREFRONT_ID_MAP = {
     "143481": "ae",
 }
 # 从Cookies中提取media-user-token
-def _load_media_user_token_from_cookies(cookies_path: str) -> str:
+def _ldmtok(cookies_path: str) -> str:
     cookies = MozillaCookieJar(cookies_path)
     cookies.load(ignore_discard=True, ignore_expires=True)
 
@@ -152,7 +150,7 @@ def _load_media_user_token_from_cookies(cookies_path: str) -> str:
 
 
 # 抓取Apple Music网页并解析JWT访问令牌
-async def _fetch_apple_music_access_tokens() -> List[str]:
+async def _ftatkns() -> List[str]:
     response = None
     async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
         try:
@@ -214,13 +212,13 @@ async def _fetch_apple_music_access_tokens() -> List[str]:
 
 
 # 从Wrapper地域标识解析Storefront国家代号
-def _storefront_from_legacy_wrapper(value: Any) -> str:
+def _sfwrpr(value: Any) -> str:
     storefront_id = str(value or "").split(",", 1)[0].split("-", 1)[0].strip()
     return APPLE_STOREFRONT_ID_MAP.get(storefront_id, "cn")
 
 
 # 构造虚拟激活订阅账户信息字典
-def _synthetic_account_info(storefront: str) -> Dict[str, Any]:
+def _synacinf(storefront: str) -> Dict[str, Any]:
     return {
         "data": [],
         "meta": {
@@ -233,7 +231,7 @@ def _synthetic_account_info(storefront: str) -> Dict[str, Any]:
 
 
 # 从本地Wrapper端口获取账户授权信息
-async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:
+async def _ftwrprac() -> Dict[str, Any]:
     errors: List[str] = []
     async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
         for account_url in LEGACY_WRAPPER_ACCOUNT_URLS:
@@ -254,13 +252,13 @@ async def _fetch_legacy_wrapper_account_info() -> Dict[str, Any]:
 
 
 # 从iTunes查询MV媒体元数据
-async def _get_music_video_metadata_from_itunes(
+async def _gtmvmeta(
     music_video_id: str,
     storefront: str,
     language: Optional[str] = None,
 ) -> Dict[str, Any]:
-    lang_tag = _normalize_itunes_language_tag(
-        language or _resolve_storefront_language_sync(storefront)
+    lang_tag = _nrmitlng(
+        language or _rsvsflgs(storefront)
     )
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
         response = await client.get(
@@ -323,11 +321,11 @@ async def _get_music_video_metadata_from_itunes(
 
 
 # 为AppleMusicApi安装MV元数据iTunes回退补丁
-def _install_legacy_music_video_metadata_fallback(api: AppleMusicApi) -> None:
+def _inmvfb(api: AppleMusicApi) -> None:
     original_get_music_video = api.get_music_video
 
     # 优先请求官方MV元数据并在失败时回退至iTunes
-    async def get_music_video_with_itunes_fallback(music_video_id: str):
+    async def _gtmvfb(music_video_id: str):
         try:
             return await original_get_music_video(music_video_id)
         except Exception as e:
@@ -336,17 +334,17 @@ def _install_legacy_music_video_metadata_fallback(api: AppleMusicApi) -> None:
                 type(e).__name__,
                 e,
             )
-            return await _get_music_video_metadata_from_itunes(
+            return await _gtmvmeta(
                 music_video_id,
                 api.storefront,
                 getattr(api, "language", None),
             )
 
-    api.get_music_video = get_music_video_with_itunes_fallback
+    api.get_music_video = _gtmvfb
 
 
 # 为Apple Music API替换支持环境代理与重试的HTTP客户端
-async def _configure_proxy_aware_client(api: AppleMusicApi) -> None:
+async def _cfpxclt(api: AppleMusicApi) -> None:
     try:
         old_client = api.client
         proxy_map = urllib.request.getproxies()
@@ -379,8 +377,8 @@ async def _configure_proxy_aware_client(api: AppleMusicApi) -> None:
 
 
 # 从本地Legacy Wrapper中继提取令牌构建AppleMusicApi
-async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
-    wrapper_account_info = await _fetch_legacy_wrapper_account_info()
+async def _crtamwrp() -> AppleMusicApi:
+    wrapper_account_info = await _ftwrprac()
     auth_info = wrapper_account_info.get("auth") if isinstance(wrapper_account_info.get("auth"), dict) else {}
 
     media_user_token = (
@@ -397,9 +395,9 @@ async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
     storefront = (
         wrapper_account_info.get("storefront")
         or auth_info.get("storefront")
-        or _storefront_from_legacy_wrapper(wrapper_account_info.get("storefront_id"))
+        or _sfwrpr(wrapper_account_info.get("storefront_id"))
     )
-    language = await _resolve_storefront_language(
+    language = await _rsvsflng(
         storefront,
         token=dev_token,
         media_user_token=media_user_token,
@@ -410,16 +408,16 @@ async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
         token=dev_token,
     )
     api.media_user_token = media_user_token
-    api.account_info = _synthetic_account_info(api.storefront)
+    api.account_info = _synacinf(api.storefront)
     api._lingo_legacy_wrapper_fallback = True
     api.client.headers.update({"cookie": f"media-user-token={media_user_token}"})
-    await _configure_proxy_aware_client(api)
-    _install_legacy_music_video_metadata_fallback(api)
+    await _cfpxclt(api)
+    _inmvfb(api)
     return api
 
 
 # 解析歌曲编码枚举
-def _resolve_song_codec_enum(codec: str):
+def _rsvsngc(codec: str):
     """
     Keep our frontend-compatible codec values working across gamdl releases.
     3.5 used AAC_LEGACY/AAC_HE_LEGACY while 3.6+ renamed them to AAC_WEB/AAC_HE_WEB.
@@ -459,7 +457,7 @@ def _resolve_song_codec_enum(codec: str):
 
 
 # 判断设置项是否处于开启状态
-def _setting_enabled(value: Any) -> bool:
+def _stgenb(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):
@@ -470,7 +468,7 @@ def _setting_enabled(value: Any) -> bool:
 
 
 # 定位可用的FFmpeg可执行文件路径
-def _resolve_ffmpeg_path() -> str:
+def _rsvffmp() -> str:
     configured = settings.ffmpgpth()
     if configured and os.path.exists(configured):
         return configured
@@ -483,7 +481,7 @@ def _resolve_ffmpeg_path() -> str:
 
 
 # 定位可用的FFprobe可执行文件路径
-def _resolve_ffprobe_path(ffmpeg_path: str) -> Optional[str]:
+def _rsvffpr(ffmpeg_path: str) -> Optional[str]:
     ffmpeg_obj = Path(ffmpeg_path)
     sibling = ffmpeg_obj.with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
     if sibling.exists():
@@ -497,7 +495,7 @@ def _resolve_ffprobe_path(ffmpeg_path: str) -> Optional[str]:
 
 
 # 探测音频源文件真实编码格式
-def _detect_source_codec(file_path: str, preferred_codec: str, ffprobe_path: Optional[str]) -> str:
+def _dtsrccdc(file_path: str, preferred_codec: str, ffprobe_path: Optional[str]) -> str:
     normalized_preferred = _normalize_codec_label(preferred_codec)
 
     if ffprobe_path:
@@ -528,24 +526,24 @@ def _detect_source_codec(file_path: str, preferred_codec: str, ffprobe_path: Opt
 
 
 # 根据当前配置构建音频转码任务列表
-def _build_transcode_jobs(source_codec: str, all_settings: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _bldtrjb(source_codec: str, all_settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         dict(spec) for key, spec in TRANSCODE_JOB_SPECS.get(source_codec, ())
-        if _setting_enabled(all_settings.get(key))
+        if _stgenb(all_settings.get(key))
     ]
 
 
 # 判断当前是否启用了任何音质转码任务
-def _has_transcode_enabled(all_settings: Dict[str, Any]) -> bool:
+def _hastrenb(all_settings: Dict[str, Any]) -> bool:
     return any(
-        _setting_enabled(all_settings.get(key))
+        _stgenb(all_settings.get(key))
         for specs in TRANSCODE_JOB_SPECS.values()
         for key, _ in specs
     )
 
 
 # 构造转码产物在目标目录的绝对路径
-def _build_converted_output_path(source_file_path: str, ext: str) -> Path:
+def _bldcvop(source_file_path: str, ext: str) -> Path:
     source_path = Path(source_file_path).resolve()
     download_root = Path(settings.outpth()).resolve()
     converted_root = Path(settings.cnvtpth()).resolve()
@@ -562,15 +560,15 @@ def _build_converted_output_path(source_file_path: str, ext: str) -> Path:
 
 
 # 检测WSL端口是否处于监听连接就绪状态
-def is_wsl_port_ready(port: int) -> bool:
+def _wslprdy(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(1.0)
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
 # 检查WSL Wrapper解密端口是否可用（由Wrapper服务负责启动）
-async def ensure_wsl_bridge() -> bool:
-    ready = await asyncio.to_thread(is_wsl_port_ready, 10020)
+async def _enswslbr() -> bool:
+    ready = await asyncio.to_thread(_wslprdy, 10020)
     if not ready:
         logger.warning("WSL decrypt port 10020 is not ready; Wrapper-based downloads may fail.")
     return ready
@@ -578,7 +576,7 @@ async def ensure_wsl_bridge() -> bool:
 
 
 # 安全读取对象属性
-def _safe_attr(obj: Any, attr_name: str, default: Any = None) -> Any:
+def _sftatr(obj: Any, attr_name: str, default: Any = None) -> Any:
     if obj is None:
         return default
     try:
@@ -588,22 +586,22 @@ def _safe_attr(obj: Any, attr_name: str, default: Any = None) -> Any:
 
 
 # 安全读取字典键值
-def _safe_map_get(obj: Any, key: str, default: Any = None) -> Any:
+def _sftmapg(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(key, default)
     return default
 
 
 # 从媒体下载产物解析并构造元数据记录
-def _extract_media_metadata(item: Any, source_url: str) -> Dict[str, Any]:
-    media = _safe_attr(item, "media")
-    tags = _safe_attr(media, "tags")
+def _extmdmt(item: Any, source_url: str) -> Dict[str, Any]:
+    media = _sftatr(item, "media")
+    tags = _sftatr(media, "tags")
     media_dict = media if isinstance(media, dict) else {}
 
     if media_dict:
-        attributes = _safe_map_get(media_dict, "attributes", {})
+        attributes = _sftmapg(media_dict, "attributes", {})
     else:
-        attributes = _safe_attr(media, "attributes", {})
+        attributes = _sftatr(media, "attributes", {})
     if not isinstance(attributes, dict):
         attributes = {}
 
@@ -612,11 +610,11 @@ def _extract_media_metadata(item: Any, source_url: str) -> Dict[str, Any]:
         play_params = {}
 
     track_id = (
-        _safe_attr(media, "media_id")
-        or _safe_attr(media, "id")
-        or _safe_map_get(media_dict, "media_id")
-        or _safe_map_get(media_dict, "id")
-        or _safe_map_get(play_params, "id")
+        _sftatr(media, "media_id")
+        or _sftatr(media, "id")
+        or _sftmapg(media_dict, "media_id")
+        or _sftmapg(media_dict, "id")
+        or _sftmapg(play_params, "id")
     )
     if track_id is None or str(track_id).strip() == "":
         parsed_url = urlparse(source_url)
@@ -626,31 +624,31 @@ def _extract_media_metadata(item: Any, source_url: str) -> Dict[str, Any]:
     track_id = str(track_id)
 
     title = (
-        _safe_attr(tags, "title")
-        or _safe_attr(media, "title")
-        or _safe_attr(media, "name")
+        _sftatr(tags, "title")
+        or _sftatr(media, "title")
+        or _sftatr(media, "name")
         or attributes.get("name")
         or "Unknown Title"
     )
     artist_name = (
-        _safe_attr(tags, "artist")
-        or _safe_attr(media, "artist")
-        or _safe_attr(media, "artist_name")
+        _sftatr(tags, "artist")
+        or _sftatr(media, "artist")
+        or _sftatr(media, "artist_name")
         or attributes.get("artistName")
         or "Unknown Artist"
     )
     album_name = (
-        _safe_attr(tags, "album")
-        or _safe_attr(media, "album")
-        or _safe_attr(media, "album_name")
+        _sftatr(tags, "album")
+        or _sftatr(media, "album")
+        or _sftatr(media, "album_name")
         or attributes.get("albumName")
         or "Unknown Album"
     )
 
-    cover = _safe_attr(media, "cover")
-    cover_url = _safe_attr(cover, "url")
+    cover = _sftatr(media, "cover")
+    cover_url = _sftatr(cover, "url")
     if not cover_url:
-        cover_url = _safe_map_get(cover, "url")
+        cover_url = _sftmapg(cover, "url")
 
     artwork = attributes.get("artwork", {})
     if not isinstance(artwork, dict):
@@ -658,7 +656,7 @@ def _extract_media_metadata(item: Any, source_url: str) -> Dict[str, Any]:
 
     artwork_url = cover_url or artwork.get("url", "")
 
-    file_path = _safe_attr(item, "final_path") or ""
+    file_path = _sftatr(item, "final_path") or ""
     file_size = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else 0
     lyrics_path = _find_sidecar_lrc_path(file_path) if file_path else ""
 
@@ -688,7 +686,7 @@ class DownloadManager:
         self._init_lock = asyncio.Lock()
 
     # 幂等懒初始化：首个业务请求触发，避免启动期网络抓取
-    async def ensure_initialized(self) -> bool:
+    async def ensinit(self) -> bool:
         if self.is_initialized:
             return True
         async with self._init_lock:
@@ -706,11 +704,11 @@ class DownloadManager:
         self.is_initialized = False
 
         # Ensure WSL Bridge is up
-        await ensure_wsl_bridge()
+        await _enswslbr()
 
         try:
-            media_user_token = _load_media_user_token_from_cookies(settings.ckspth())
-            candidate_tokens = await _fetch_apple_music_access_tokens()
+            media_user_token = _ldmtok(settings.ckspth())
+            candidate_tokens = await _ftatkns()
 
             init_errors: List[str] = []
             for access_token in candidate_tokens:
@@ -719,14 +717,14 @@ class DownloadManager:
                         media_user_token=media_user_token,
                         token=access_token,
                     )
-                    await _configure_proxy_aware_client(self.apple_music_api)
+                    await _cfpxclt(self.apple_music_api)
                     if not self.apple_music_api.active_subscription:
                         init_errors.append("No active Apple Music subscription found.")
                         self.apple_music_api = None
                         continue
 
                     # 依据账户所属Storefront自动设定对应的本地化元数据语言
-                    self.apple_music_api.language = await _resolve_storefront_language(
+                    self.apple_music_api.language = await _rsvsflng(
                         self.apple_music_api.storefront,
                         token=self.apple_music_api.token,
                         media_user_token=self.apple_music_api.media_user_token,
@@ -738,7 +736,7 @@ class DownloadManager:
                     self.apple_music_api = None
 
             try:
-                self.apple_music_api = await _create_apple_music_api_from_legacy_wrapper()
+                self.apple_music_api = await _crtamwrp()
                 if self.apple_music_api.active_subscription:
                     logger.warning(
                         "Initialized Apple Music API via legacy wrapper fallback. "
@@ -770,7 +768,7 @@ class DownloadManager:
             else all_settings.get(SETTINGS_KEY_METADATA_REGION, "auto")
         )
         account_sf = (getattr(self.apple_music_api, "storefront", "") or "cn").lower()
-        target_sf, target_lang = await _resolve_target_metadata_region_and_language(
+        target_sf, target_lang = await _rsvtgtln(
             account_sf,
             requested_region,
             token=getattr(self.apple_music_api, "token", None),
@@ -831,9 +829,9 @@ class DownloadManager:
         )
 
         try:
-            song_codec_enum = _resolve_song_codec_enum(codec)
+            song_codec_enum = _rsvsngc(codec)
         except ValueError:
-            song_codec_enum = _resolve_song_codec_enum("aac-legacy")
+            song_codec_enum = _rsvsngc("aac-legacy")
 
         try:
             video_res_enum = rt_ifaces.MusicVideoResolution(video_resolution)
@@ -883,7 +881,7 @@ class DownloadManager:
         )
 
     # 根据格式、设备环境与元数据地区配置构建下载器实例
-    async def _create_downloader(
+    async def _crtdl(
         self,
         codec: str,
         video_resolution: str,
@@ -920,7 +918,7 @@ class DownloadManager:
             raise
 
     # 将指定URL加入后台异步下载任务队列
-    async def add_to_queue(
+    async def adque(
         self,
         url: str,
         codec: str = "aac-legacy",
@@ -945,7 +943,7 @@ class DownloadManager:
         }
 
         try:
-            downloader = await self._create_downloader(
+            downloader = await self._crtdl(
                 codec,
                 video_resolution,
                 use_wrapper,
@@ -957,7 +955,7 @@ class DownloadManager:
             self.download_status[url]["error"] = str(e)
             return False
 
-        task = asyncio.create_task(self._process_url(downloader, url))
+        task = asyncio.create_task(self._prcurl(downloader, url))
         # Keep a strong reference so GC cannot destroy the task before it finishes.
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
@@ -978,11 +976,11 @@ class DownloadManager:
                 if isinstance(error_obj, rt.GamdlInterfaceFormatNotAvailableError):
                     hint = "该曲目不提供当前音质，已跳过并继续下载其他曲目。"
                 elif isinstance(error_obj, GamdlApiResponseError):
-                    hint = _get_api_error_hint(error_obj.status_code)
+                    hint = _apihint(error_obj.status_code)
                 else:
                     hint = "该曲目解析失败，已跳过并继续下载其他曲目。"
 
-                error_meta = _extract_media_metadata(item, url)
+                error_meta = _extmdmt(item, url)
                 error_item = {
                     "status": "error",
                     "track_id": error_meta["track_id"],
@@ -1000,7 +998,7 @@ class DownloadManager:
 
             if item.final_path is None or item.media.partial:
                 continue
-            meta = _extract_media_metadata(item, url)
+            meta = _extmdmt(item, url)
             self.download_status[url]["items"].append({
                 "status": "pending",
                 "track_id": meta["track_id"],
@@ -1033,18 +1031,18 @@ class DownloadManager:
         self.download_status[url]["items"][index]["status"] = "downloading"
         try:
             await downloader.download(item)
-            metadata = _extract_media_metadata(item, url)
-            self._mark_item_completed(url, index, metadata)
-            self._insert_history_safe(url, metadata)
-            await asyncio.to_thread(self._run_transcode_pipeline_safe, url, metadata)
+            metadata = _extmdmt(item, url)
+            self._mrkcmp(url, index, metadata)
+            self._inshst(url, metadata)
+            await asyncio.to_thread(self._runtrscs, url, metadata)
         except rt.GamdlDownloaderMediaFileExistsError as e:
-            metadata = _extract_media_metadata(item, url)
-            self._mark_item_completed(url, index, metadata)
+            metadata = _extmdmt(item, url)
+            self._mrkcmp(url, index, metadata)
             self.download_status[url]["items"][index]["hint"] = "本地文件已存在，跳过重复下载并已写入历史记录"
             self.download_status[url]["items"][index]["already_exists"] = True
             logger.info("Skip existing media file: %s", e)
-            self._insert_history_safe(url, metadata)
-            await asyncio.to_thread(self._run_transcode_pipeline_safe, url, metadata)
+            self._inshst(url, metadata)
+            await asyncio.to_thread(self._runtrscs, url, metadata)
         except GamdlApiResponseError as e:
             detail = f"{e.message}"
             if e.status_code:
@@ -1052,7 +1050,7 @@ class DownloadManager:
             if e.content:
                 detail += f" | Response: {str(e.content)[:300]}"
             logger.error("Apple Music API error: %s", detail)
-            self._setierr(url, index, detail, _get_api_error_hint(e.status_code))
+            self._setierr(url, index, detail, _apihint(e.status_code))
         except rt.GamdlInterfaceDecryptionNotAvailableError:
             msg = (
                 "Decryption not available. Wrapper may be expired or not fully ready. "
@@ -1097,7 +1095,7 @@ class DownloadManager:
             self.download_status[url]["status"] = "completed"
 
     # 驱动单任务解析与分步执行下载流程
-    async def _process_url(self, downloader, url: str):
+    async def _prcurl(self, downloader, url: str):
         try:
             self.download_status[url]["status"] = "processing"
             download_queue, preflight_error_items = await self._prefl(downloader, url)
@@ -1145,7 +1143,7 @@ class DownloadManager:
             logger.error("Failed to prune download_status: %s", e)
 
     # 更新单曲下载状态并标记完成
-    def _mark_item_completed(self, url: str, index: int, metadata: Dict[str, Any]) -> None:
+    def _mrkcmp(self, url: str, index: int, metadata: Dict[str, Any]) -> None:
         self.download_status[url]["items"][index].update({
             "status": "completed",
             "track_id": metadata["track_id"],
@@ -1162,7 +1160,7 @@ class DownloadManager:
             self.download_status[url]["file_path"] = metadata["file_path"]
 
     # 安全记录单曲下载历史到本地SQLite
-    def _insert_history_safe(self, url: str, metadata: Dict[str, Any]) -> None:
+    def _inshst(self, url: str, metadata: Dict[str, Any]) -> None:
         try:
             history_data = {
                 "track_id": metadata["track_id"],
@@ -1180,33 +1178,33 @@ class DownloadManager:
             logger.error(f"Failed to insert download history: {e}")
 
     # 安全捕获异常并执行转码管道
-    def _run_transcode_pipeline_safe(self, url: str, metadata: Dict[str, Any]) -> None:
+    def _runtrscs(self, url: str, metadata: Dict[str, Any]) -> None:
         try:
-            self._run_transcode_pipeline(url, metadata)
+            self._runtrsc(url, metadata)
         except Exception as e:
             logger.error("Failed to run transcode pipeline: %s", e, exc_info=True)
 
     # 执行本地音频格式转码后处理管道
-    def _run_transcode_pipeline(self, url: str, metadata: Dict[str, Any]) -> None:
+    def _runtrsc(self, url: str, metadata: Dict[str, Any]) -> None:
         source_path = str(metadata.get("file_path") or "").strip()
         if not source_path or not os.path.exists(source_path):
             return
 
         all_settings = get_all_settings()
-        if not _has_transcode_enabled(all_settings):
+        if not _hastrenb(all_settings):
             return
 
         preferred_codec = self.download_status.get(url, {}).get("codec", "")
-        ffmpeg_path = _resolve_ffmpeg_path()
-        ffprobe_path = _resolve_ffprobe_path(ffmpeg_path)
-        source_codec = _detect_source_codec(source_path, preferred_codec, ffprobe_path)
+        ffmpeg_path = _rsvffmp()
+        ffprobe_path = _rsvffpr(ffmpeg_path)
+        source_codec = _dtsrccdc(source_path, preferred_codec, ffprobe_path)
 
-        jobs = _build_transcode_jobs(source_codec, all_settings)
+        jobs = _bldtrjb(source_codec, all_settings)
         if not jobs:
             return
 
         for job in jobs:
-            output_path = _build_converted_output_path(source_path, job["ext"])
+            output_path = _bldcvop(source_path, job["ext"])
             ffmpeg_cmd = [
                 ffmpeg_path,
                 "-y",
@@ -1250,7 +1248,7 @@ class DownloadManager:
 
 
 # 映射HTTP状态码为友好排查提示文本
-def _get_api_error_hint(status_code: Optional[int]) -> str:
+def _apihint(status_code: Optional[int]) -> str:
     """Return a user-friendly hint based on the HTTP status code."""
     if status_code is None:
         return ("Could not reach the Apple Music API. "

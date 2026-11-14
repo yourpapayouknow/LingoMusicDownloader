@@ -1,6 +1,6 @@
 # Wrapper服务部署、解压、进程生命周期与交互认证管理模块
 from backend.head import (
-    APIRouter, HTTPException, BaseModel, Optional, List, Dict, Any,
+    APIRouter, BaseModel, Optional, List, Dict, Any,
     asyncio, os, time, subprocess, threading, Path, re, shlex, shutil, urllib, zipfile, logging
 )
 from backend.core.config import settings
@@ -10,7 +10,7 @@ from backend.api.common import (
     WRAPPER_SETUP_TIMEOUT_SECONDS, WRAPPER_STARTUP_GRACE_SECONDS,
     WRAPPER_SESSION_DB_RELATIVE_PATH,
     chkprt, rncptr, wrprstcpy, wrprstset, wrprstlog, setwrprprc, gtwrprprc,
-    wrprhlth, _wrapper_setup_state_lock, _wrapper_process_lock
+    wrprhlth, _wrapper_setup_state_lock
 )
 from backend.api.routes_wsl import dtctwsl
 
@@ -729,7 +729,7 @@ async def gtwrprsttsrtr():
 
 # 提交Wrapper交互凭证或验证码端点
 @router.post("/wrapper/setup/input")
-async def sbmtwrprintrtr(request: WrapperSetupInputRequest):
+async def sbmtwrpin(request: WrapperSetupInputRequest):
     state = wrprstcpy()
     expected = str(state.get("input_type") or "").strip().lower()
     requested = (request.input_type or "").strip().lower()
