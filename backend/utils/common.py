@@ -27,6 +27,27 @@ def nrmlcdclbl(raw_codec: Optional[str]) -> str:
     return value
 
 
+# 归一化前端画质别名
+def nrmlvdqlty(raw_resolution: Optional[str]) -> str:
+    value = (raw_resolution or "").strip().lower()
+    return "2160p" if value == "4k" else value
+
+
+# 校验下载参数组合
+def vlddwnopt(
+    raw_codec: Optional[str],
+    use_wrapper: bool,
+    metadata_region: Optional[str],
+) -> Optional[str]:
+    codec = nrmlcdclbl(raw_codec)
+    if codec in {"alac", "dolby"} and not use_wrapper:
+        return "当前音质需要解密组件支持。请先启用并确保解密组件正在运行后重试。"
+    region = (metadata_region or "").strip()
+    if region and region != "auto" and not re.fullmatch(r"[A-Za-z]{2}", region):
+        return "元数据地区必须是 auto 或两位地区码。"
+    return None
+
+
 # 规整化iTunes封面图占位模板
 def itnsarttmpl(url: str) -> str:
     if not url:

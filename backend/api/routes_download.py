@@ -11,7 +11,7 @@ from backend.services.local_library import (
 from backend.core.config import settings
 from backend.db.database import gthstrybytrk, updhstrylrc
 from backend.api.common import wrprhlth
-from backend.utils.common import nrmlcdclbl, fndsdcrlrc
+from backend.utils.common import nrmlcdclbl, nrmlvdqlty, vlddwnopt, fndsdcrlrc
 
 # 日志记录器与路由器
 logger = logging.getLogger(__name__)
@@ -21,10 +21,10 @@ router = APIRouter()
 # 下载请求模型定义
 class DownloadRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2048)
-    codec: Literal["aac-legacy", "aac", "alac", "dolby"] = "aac-legacy"
-    video_resolution: Literal["480p", "720p", "1080p", "2160p"] = "1080p"
+    codec: Literal["aac-legacy", "aac", "alac", "dolby", "atmos"] = "aac-legacy"
+    video_resolution: Literal["480p", "720p", "1080p", "2160p", "4k"] = "1080p"
     use_wrapper: bool = False
-    metadata_region: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{2}$")
+    metadata_region: Optional[str] = Field(default=None, pattern=r"^(auto|[A-Za-z]{2})$")
 
 
 # 打开目录请求模型定义
@@ -72,6 +72,10 @@ def gttrckfl(track_id: str) -> Dict[str, Any]:
 # 提交单曲或专辑下载任务端点
 @router.post("/download")
 async def strtdwnld(request: DownloadRequest):
+    option_error = vlddwnopt(request.codec, request.use_wrapper, request.metadata_region)
+    if option_error:
+        raise HTTPException(status_code=400, detail=option_error)
+
     if not await manager.ensinit():
         raise HTTPException(
             status_code=500,
@@ -79,11 +83,7 @@ async def strtdwnld(request: DownloadRequest):
         )
 
     normalized_codec = nrmlcdclbl(request.codec)
-    if normalized_codec in {"alac", "dolby"} and not request.use_wrapper:
-        raise HTTPException(
-            status_code=400,
-            detail="当前音质需要解密组件支持。请先启用并确保解密组件正在运行后重试。",
-        )
+    normalized_resolution = nrmlvdqlty(request.video_resolution)
 
     if request.use_wrapper:
         wrapper_health = await asyncio.to_thread(wrprhlth)
@@ -102,7 +102,7 @@ async def strtdwnld(request: DownloadRequest):
     added = await manager.adque(
         request.url,
         codec=normalized_codec,
-        video_resolution=request.video_resolution,
+        video_resolution=normalized_resolution,
         use_wrapper=request.use_wrapper,
         metadata_region=request.metadata_region,
     )

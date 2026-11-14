@@ -1,13 +1,14 @@
 # 提交并跟踪单个下载任务
 from backend.head import argparse, asyncio, json, sys, time
 from backend.services.downloader import manager
+from backend.utils.common import nrmlvdqlty, vlddwnopt
 
 
 # 注册download子命令参数
 def adargs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("url", help="Apple Music链接")
-    parser.add_argument("--codec", default="aac-legacy", choices=["aac-legacy", "aac", "alac", "dolby"])
-    parser.add_argument("--resolution", default="1080p", choices=["480p", "720p", "1080p", "2160p"])
+    parser.add_argument("--codec", default="aac-legacy", choices=["aac-legacy", "aac", "alac", "dolby", "atmos"])
+    parser.add_argument("--resolution", default="1080p", choices=["480p", "720p", "1080p", "2160p", "4k"])
     parser.add_argument("--wrapper", action="store_true", help="使用Wrapper高规格能力")
     parser.add_argument("--region", default=None, help="元数据地区，例如cn/us/jp")
     parser.add_argument("--timeout", type=int, default=900, help="等待超时秒数")
@@ -26,12 +27,15 @@ async def _wait(url: str, timeout: int) -> dict:
 
 # 提交任务并等待完成
 async def _dl(args) -> dict:
+    option_error = vlddwnopt(args.codec, args.wrapper, args.region)
+    if option_error:
+        raise RuntimeError(option_error)
     if not await manager.ensinit():
         raise RuntimeError("下载器初始化失败，请检查cookies.txt")
     added = await manager.adque(
         args.url,
         codec=args.codec,
-        video_resolution=args.resolution,
+        video_resolution=nrmlvdqlty(args.resolution),
         use_wrapper=args.wrapper,
         metadata_region=args.region,
     )

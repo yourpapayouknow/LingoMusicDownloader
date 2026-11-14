@@ -1,7 +1,8 @@
 [package]
 name = "lingo-music-downloader"
-version = "2.1.1-beta"
+version = "2.2.0"
 edition = "2021"
+license = "GPL-3.0-only"
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }

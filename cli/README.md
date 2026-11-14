@@ -13,7 +13,7 @@
 .\.venv\Scripts\python.exe -m cli search "周杰伦" --limit 20
 
 # 提交并跟踪下载任务
-.\.venv\Scripts\python.exe -m cli download "https://music.apple.com/cn/album/..." --codec alac --wrapper
+.\.venv\Scripts\python.exe -m cli download "<分享链接>" --codec alac --wrapper
 
 # 读取或写入设置
 .\.venv\Scripts\python.exe -m cli settings get
@@ -23,7 +23,7 @@
 .\.venv\Scripts\python.exe -m cli library scan
 .\.venv\Scripts\python.exe -m cli library list
 
-# Wrapper与WSL2
+# 解密组件与WSL2
 .\.venv\Scripts\python.exe -m cli wrapper precheck
 .\.venv\Scripts\python.exe -m cli wrapper start
 .\.venv\Scripts\python.exe -m cli wsl precheck

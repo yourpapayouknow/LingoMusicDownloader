@@ -376,6 +376,17 @@ async def _cfpxclt(api: AppleMusicApi) -> None:
         logger.warning("Failed to configure proxy-aware client for AppleMusicApi: %s", e)
 
 
+# 关闭废弃Apple Music客户端的HTTP连接池
+async def _clsapi(api) -> None:
+    client = getattr(api, "client", None)
+    if client is None:
+        return
+    try:
+        await client.aclose()
+    except Exception:
+        logger.debug("Failed to close discarded Apple Music client", exc_info=True)
+
+
 # 从本地Legacy解密组件中继提取令牌构建AppleMusicApi
 async def _crtamwrp() -> AppleMusicApi:
     wrapper_account_info = await _ftwrprac()
@@ -694,14 +705,16 @@ class DownloadManager:
                 return True
             return await self._intlz()
 
-    # 初始化Apple Music下载引擎及鉴权客户端（调用方需持有初始化锁）
-    async def _intlz(self):
+    # 强制重新初始化：登录凭据更新后原子替换下载核心
+    async def relinit(self) -> bool:
+        async with self._init_lock:
+            return await self._intlz()
+
+    # 构建新的Apple Music客户端；失败时返回None
+    async def _bldapi(self):
         if not os.path.exists(settings.ckspth()):
             logger.error(f"Cookies file not found at {settings.ckspth()}")
-            return False
-
-        self.apple_music_api = None
-        self.is_initialized = False
+            return None
 
         # Ensure WSL Bridge is up
         await _enswslbr()
@@ -712,52 +725,61 @@ class DownloadManager:
 
             init_errors: List[str] = []
             for access_token in candidate_tokens:
+                api = None
                 try:
-                    self.apple_music_api = await AppleMusicApi.create(
+                    api = await AppleMusicApi.create(
                         media_user_token=media_user_token,
                         token=access_token,
                     )
-                    await _cfpxclt(self.apple_music_api)
-                    if not self.apple_music_api.active_subscription:
+                    await _cfpxclt(api)
+                    if not api.active_subscription:
                         init_errors.append("No active Apple Music subscription found.")
-                        self.apple_music_api = None
+                        await _clsapi(api)
                         continue
 
                     # 依据账户所属Storefront自动设定对应的本地化元数据语言
-                    self.apple_music_api.language = await _rsvsflng(
-                        self.apple_music_api.storefront,
-                        token=self.apple_music_api.token,
-                        media_user_token=self.apple_music_api.media_user_token,
+                    api.language = await _rsvsflng(
+                        api.storefront,
+                        token=api.token,
+                        media_user_token=api.media_user_token,
                     )
-                    self.is_initialized = True
-                    return True
+                    return api
                 except Exception as token_error:
                     init_errors.append(str(token_error))
-                    self.apple_music_api = None
+                    await _clsapi(api)
 
+            api = None
             try:
-                self.apple_music_api = await _crtamwrp()
-                if self.apple_music_api.active_subscription:
+                api = await _crtamwrp()
+                if api.active_subscription:
                     logger.warning(
                         "Initialized Apple Music API via legacy wrapper fallback. "
                         "Apple account subscription probe was unavailable; continuing with wrapper tokens."
                     )
-                    self.is_initialized = True
-                    return True
+                    return api
                 init_errors.append("Wrapper account has no active Apple Music subscription.")
-                self.apple_music_api = None
+                await _clsapi(api)
             except Exception as wrapper_error:
                 init_errors.append(f"Wrapper fallback failed: {wrapper_error}")
-                self.apple_music_api = None
+                await _clsapi(api)
 
             logger.error(
                 "Failed to initialize Gamdl downloader: %s",
                 " | ".join(init_errors[:3]) if init_errors else "Unknown initialization error",
             )
-            return False
+            return None
         except Exception as e:
             logger.error(f"Failed to initialize Gamdl downloader: {e}")
+            return None
+
+    # 初始化并原子替换Apple Music客户端（调用方需持有初始化锁）
+    async def _intlz(self) -> bool:
+        api = await self._bldapi()
+        if api is None:
             return False
+        self.apple_music_api = api
+        self.is_initialized = True
+        return True
 
     # 解析元数据地区并构造本地化API副本
     async def _mdctx(self, metadata_region: Optional[str]):

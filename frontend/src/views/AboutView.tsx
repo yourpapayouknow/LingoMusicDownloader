@@ -70,9 +70,9 @@ export function AbtVw({ store }: { store: AppStore }) {
               variant="ghost"
               size="sm"
               leadingIcon={<Icn name="link" size={14} />}
-              onClick={() => opnext(`${repositoryUrl}/blob/main/LICENSE`, 'MIT许可证')}
+              onClick={() => opnext(`${repositoryUrl}/blob/main/LICENSE`, 'GPL-3.0许可证')}
             >
-              MIT许可证
+              GPL-3.0许可证
             </Btn>
           </HStk>
         </VStk>
@@ -130,7 +130,7 @@ export function AbtVw({ store }: { store: AppStore }) {
               <Txt weight={700} tone="error" style={{ whiteSpace: 'nowrap' }}>使用声明</Txt>
             </HStk>
             <Txt tone="secondary" style={{ fontSize: '0.78rem', paddingLeft: '26px' }}>
-              仅供个人学习研究，禁止商业或侵权用途。
+              下载内容仅供个人学习研究，禁止用于商业或侵权用途。
             </Txt>
           </VStk>
           <Btn variant="ghost" size="sm" onClick={() => setLegalOpen(true)}>
@@ -172,14 +172,14 @@ export function AbtVw({ store }: { store: AppStore }) {
           >
             {disclaimerLang === 'zh' ? (
               <>
-                <p style={{ marginBlock: '0 6px' }}>1. 本软件为开源学习交流项目，仅限用于个人技术交流与研究目的。<b>严禁将本软件用于任何商业性牟利或非法侵权行为。</b></p>
+                <p style={{ marginBlock: '0 6px' }}>1. 本软件以GPL-3.0许可证开源，可用于技术交流与研究。<b>严禁将下载内容用于任何商业性牟利或非法侵权行为。</b></p>
                 <p style={{ marginBlock: '6px' }}>2. 软件中所调用的音视频解密辅助接口及WSL环境，均来源自网络公共研究文献。本软件不提供任何音源版权破解，亦不存储任何受版权保护的音视频文件。</p>
                 <p style={{ marginBlock: '6px' }}>3. 用户利用本应用检索或下载的所有音乐、歌词、唱片封面和MV视频内容，<b>版权均归原版权方合法所有。</b>请于下载后24小时内将其全部删除。</p>
                 <p style={{ marginBlock: '6px 0' }}>4. 因使用本软件所产生的账号封禁、数字版权纠纷、民事侵权或刑事纠纷风险，<b>均由使用者个人自行承担全部责任</b>，软件作者和开发团队不承担任何连带赔偿与法律责任。</p>
               </>
             ) : (
               <>
-                <p style={{ marginBlock: '0 6px' }}>1. This software is an open-source educational project for research and technical exploration. <b>Any commercial usage or infringement is strictly prohibited.</b></p>
+                <p style={{ marginBlock: '0 6px' }}>1. This software is open source under GPL-3.0 and may be used for research and technical exploration. <b>Commercial use of downloaded content or any infringing use is strictly prohibited.</b></p>
                 <p style={{ marginBlock: '6px' }}>2. The decryption helper and proxy configurations are based on public network research. This tool does not directly host, crack, or bypass digital rights ownerships.</p>
                 <p style={{ marginBlock: '6px' }}>3. All ownership rights for audio/video materials fetched by this client <b>belong to the original legal rights holders.</b> Please delete files within 24 hours of retrieval.</p>
                 <p style={{ marginBlock: '6px 0' }}>4. Risk of account suspension, copyright enforcement, civil liability, or damages <b>falls entirely upon the individual user.</b> The developers assume no legal responsibility or liability.</p>

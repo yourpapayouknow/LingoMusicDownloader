@@ -441,13 +441,13 @@ def exptaplcks(
     }
 
 
-# 带短重试的下载核心初始化
+# 带短重试的下载核心重载
 async def intmngrrtr(
     attempts: int = COOKIE_INIT_RETRY_ATTEMPTS,
     delay_seconds: float = COOKIE_INIT_RETRY_DELAY_SECONDS,
 ) -> bool:
     for index in range(max(1, attempts)):
-        ok = await manager.ensinit()
+        ok = await manager.relinit()
         if ok:
             return True
         if index < attempts - 1:

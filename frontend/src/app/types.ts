@@ -35,9 +35,11 @@ export interface QueueItem {
     cover?: string
     status: 'pending' | 'downloading' | 'completed' | 'error'
     error?: string
+    hint?: string
   }>
   sourceUrl?: string
   errorDetails?: string
+  warning?: string
   file_path?: string
 }
 

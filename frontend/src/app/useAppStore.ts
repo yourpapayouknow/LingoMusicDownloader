@@ -986,6 +986,7 @@ export function useStor() {
             file_path?: string
             status: 'pending' | 'downloading' | 'completed' | 'error'
             error?: string
+            hint?: string
           }> = rawItems.map((child: DownloadItem, idx: number) => ({
             trackId: String(child?.track_id || `${url}-${idx}`),
             name: (child?.name as string | undefined) || `曲目 ${idx + 1}`,
@@ -995,6 +996,7 @@ export function useStor() {
             file_path: child?.file_path as string | undefined,
             status: (child?.status as 'pending' | 'downloading' | 'completed' | 'error' | undefined) || 'pending',
             error: child?.error as string | undefined,
+            hint: child?.hint as string | undefined,
           }))
 
           const firstMediaItem = children[0]
@@ -1004,6 +1006,8 @@ export function useStor() {
           const isMvTask = !isAlbumTask && sourceLower.includes('/music-video/')
 
           const hasError = children.some((child) => child.status === 'error')
+          const errorCount = children.filter((child) => child.status === 'error').length
+          const failedChild = children.find((child) => child.status === 'error')
           const allCompleted = children.length > 0 && children.every((child) => child.status === 'completed')
           const backendTaskStatus = String(item?.status || '').toLowerCase()
           let normalizedStatus: QueueItem['status'] = 'downloading'
@@ -1053,8 +1057,12 @@ export function useStor() {
               cover: child.artworkUrl ? gtarturl(child.artworkUrl, 96) : cover,
               status: child.status,
               error: child.error,
+              hint: child.hint,
             })) : undefined,
-            errorDetails: item.error || children.find((child) => child.error)?.error || '',
+            errorDetails: failedChild?.hint || item.error || failedChild?.error || '',
+            warning: normalizedStatus === 'completed' && errorCount > 0
+              ? `${errorCount} 首曲目未下载完成`
+              : undefined,
             sourceUrl: url,
             file_path: firstMediaItem?.file_path || item.file_path || ''
           })
@@ -1072,8 +1080,14 @@ export function useStor() {
     
     // Fetch Settings
     gtstngs().then(settings => {
-      if (settings[SETTINGS_KEY_CODEC]) setCodec(String(settings[SETTINGS_KEY_CODEC]))
-      if (settings[SETTINGS_KEY_RESOLUTION]) setResolution(String(settings[SETTINGS_KEY_RESOLUTION]))
+      if (settings[SETTINGS_KEY_CODEC]) {
+        const codecVal = String(settings[SETTINGS_KEY_CODEC])
+        setCodec(codecVal === 'dolby' ? 'atmos' : codecVal)
+      }
+      if (settings[SETTINGS_KEY_RESOLUTION]) {
+        const resolutionVal = String(settings[SETTINGS_KEY_RESOLUTION])
+        setResolution(resolutionVal === '2160p' ? '4k' : resolutionVal)
+      }
       if (settings[SETTINGS_KEY_METADATA_REGION]) {
         const regionVal = String(settings[SETTINGS_KEY_METADATA_REGION])
         setMetadataRegion(regionVal)

@@ -36,6 +36,7 @@ flet_screen*.png
 # Local binary tools (READMEs are tracked, executables are not)
 bin/*
 !bin/README.md
+!bin/install.ps1
 !bin/ffmpeg/
 bin/ffmpeg/*
 !bin/ffmpeg/README.md

@@ -15,8 +15,16 @@ export function DwnDlg({ store }: { store: AppStore }) {
   if (!downloadConfirmTrack) return null
 
   const wrapperBlocked = useWrapper && !healthStatus?.wrapper.all_ok
-  const codecBlocked = !useWrapper && (codec === 'alac' || codec === 'atmos')
+  const codecBlocked = !useWrapper && (codec === 'alac' || codec === 'atmos' || codec === 'dolby')
   const blocked = wrapperBlocked || codecBlocked
+  const resolutionLabels: Record<string, string> = {
+    '480p': '480p标清视频',
+    '720p': '720p高清视频',
+    '1080p': '1080p高清视频',
+    '4k': '4K超高清画质',
+    '2160p': '4K超高清画质',
+  }
+  const resolutionLabel = resolutionLabels[resolution] || '1080p高清视频'
 
   return (
     <Dlg
@@ -58,11 +66,12 @@ export function DwnDlg({ store }: { store: AppStore }) {
             <Txt style={{ fontSize: '0.86rem' }}>预计下载品质：</Txt>
             <Bdg tone="success">
               {downloadConfirmTrack.type === 'music-videos'
-                ? (resolution === '4k' ? '4K超高清画质' : '1080p高清视频')
-                : (useWrapper 
-                    ? (codec === 'atmos' ? '杜比全景声' : 'ALAC无损母带（24-bit/192kHz）')
+                ? resolutionLabel
+                : codec === 'atmos' || codec === 'dolby'
+                  ? '杜比全景声'
+                  : codec === 'alac'
+                    ? 'ALAC无损母带（24-bit/192kHz）'
                     : 'AAC标准音质（256kbps）'
-                  )
               }
             </Bdg>
           </HStk>

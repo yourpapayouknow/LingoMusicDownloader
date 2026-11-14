@@ -1,0 +1,39 @@
+LingoMusicDownloader
+Copyright (C) 2025-2026 yourpapayouknow
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+Third-party components
+======================
+
+This project depends on third-party software; each component retains its
+own license. Key components:
+
+- gamdl (MIT), FastAPI (MIT), Uvicorn (BSD-3-Clause), httpx (BSD-3-Clause),
+  pydantic (MIT), yt-dlp (Unlicense), m3u8 (MIT), Pillow (MIT-CMU),
+  pycryptodome (BSD-2-Clause/Public Domain), httpx-retries (MIT),
+  socksio (MIT).
+- pywidevine (GPL-3.0-only), mutagen (GPL-2.0-or-later), Unidecode
+  (GPL-2.0-or-later).
+- React (MIT), Vite (MIT), TypeScript (Apache-2.0), Tauri
+  (Apache-2.0 OR MIT), MingCute Icons (Apache-2.0).
+- FFmpeg: the bundled Windows build is GPLv3. If you redistribute it,
+  provide the corresponding source or a written offer and the applicable
+  notices.
+- mp4decrypt (Bento4): Bento4 is distributed under GPL-2.0-only or a
+  commercial license. It is not part of the GPL-3.0-licensed work. Do not
+  bundle mp4decrypt with the GPL-3.0 release unless you have a commercial
+  license or distribute it separately under its own terms.
+
+The GPL-3.0 license applies to this project's own source code. It does not
+grant rights to music, lyrics, artwork, or other third-party content.

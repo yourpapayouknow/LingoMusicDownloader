@@ -347,7 +347,7 @@ wheels = [
 
 [[package]]
 name = "lingo-music-downloader-legacy"
-version = "2.1.1b1"
+version = "2.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },

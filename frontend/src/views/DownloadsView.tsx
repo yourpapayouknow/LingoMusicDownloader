@@ -62,6 +62,16 @@ export function DwnVw({ store }: { store: AppStore }) {
               const isDownloading = item.status === 'downloading'
               const isAlbum = item.type === 'album'
               const isAlbumOpen = openAlbums[item.id]
+              const albumToggle = isAlbum ? (
+                <Btn
+                  variant="ghost"
+                  size="sm"
+                  trailingIcon={<Icn name="chevronDown" size={12} style={{ transform: isAlbumOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />}
+                  onClick={() => setOpenAlbums(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                >
+                  {isAlbumOpen ? '收起曲目' : '查看曲目'}
+                </Btn>
+              ) : null
 
               return (
                 <Crd key={item.id} style={{ borderLeft: isErr ? '4px solid var(--system-error)' : undefined }}>
@@ -104,6 +114,7 @@ export function DwnVw({ store }: { store: AppStore }) {
                         {isErr && (
                           <HStk gap="compact" align="center">
                             <Icn name="alert" size={16} style={{ color: 'var(--system-error)' }} />
+                            {albumToggle}
                             <IcBtn
                               variant="ghost"
                               size={32}
@@ -117,16 +128,7 @@ export function DwnVw({ store }: { store: AppStore }) {
 
                         {isCompleted && (
                           <HStk gap="compact">
-                            {isAlbum && (
-                              <Btn
-                                variant="ghost"
-                                size="sm"
-                                trailingIcon={<Icn name="chevronDown" size={12} style={{ transform: isAlbumOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />}
-                                onClick={() => setOpenAlbums(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                              >
-                                {isAlbumOpen ? '收起曲目' : '查看曲目'}
-                              </Btn>
-                            )}
+                            {albumToggle}
                             <IcBtn
                               variant="ghost"
                               size={32}
@@ -161,6 +163,12 @@ export function DwnVw({ store }: { store: AppStore }) {
                         )}
                       </HStk>
                     </HStk>
+
+                    {item.warning && (
+                      <Txt tone="error" style={{ fontSize: '0.76rem' }}>
+                        {item.warning}
+                      </Txt>
+                    )}
 
                     {/* Album Subtracks list */}
                     {isAlbum && isAlbumOpen && item.tracks && (
@@ -234,6 +242,11 @@ export function DwnVw({ store }: { store: AppStore }) {
                                 </IcBtn>
                               </HStk>
                             </HStk>
+                            {track.status === 'error' && (track.hint || track.error) && (
+                              <Txt tone="error" style={{ fontSize: '0.76rem', paddingInlineStart: '1.2em', marginTop: '2px', wordBreak: 'break-word' }}>
+                                {track.hint || track.error}
+                              </Txt>
+                            )}
                           </div>
                         ))}
                       </div>
