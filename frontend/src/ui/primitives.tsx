@@ -184,7 +184,7 @@ export function HStk({ children, className, style, gap = 'normal', align, justif
       style={{
         ...style,
         gap: resolveSpace(gap),
-        alignItems: align,
+        alignItems: align ?? 'center',
         justifyContent: justify,
         flexWrap: wrap ? 'wrap' : 'nowrap',
       }}

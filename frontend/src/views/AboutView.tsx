@@ -1,7 +1,7 @@
 // 关于页视图
 import { useState } from '../head'
 import { Btn, Crd, Dlg, IcBtn, Seg } from '../ui/components'
-import { Dvd, Grd, HStk, Hdg, Icn, Img, Txt, VStk } from '../ui/primitives'
+import { Grd, HStk, Hdg, Icn, Img, Txt, VStk } from '../ui/primitives'
 import logoImage from '../assets/logo.svg'
 import type { AppStore } from '../app/useAppStore'
 
@@ -97,14 +97,24 @@ export function AbtVw({ store }: { store: AppStore }) {
       <Crd>
         <VStk gap="compact">
           <Txt weight={700}>开源致谢</Txt>
-          {LIBS.map((lib, index) => (
-            <div key={lib.name}>
-              {index > 0 && <Dvd />}
-              <HStk justify="space-between" align="center" gap="compact">
-                <VStk gap={2} style={{ minWidth: 0 }}>
+          <VStk gap={0}>
+            {LIBS.map((lib, index) => (
+              <HStk
+                key={lib.name}
+                justify="space-between"
+                align="center"
+                gap="compact"
+                style={{
+                  paddingBlock: '10px',
+                  borderTop: index > 0
+                    ? '1px solid color-mix(in srgb, var(--component-wrapped-bg) 24%, transparent)'
+                    : undefined,
+                }}
+              >
+                <HStk gap="compact" align="center" style={{ minWidth: 0 }}>
                   <Txt weight={600} style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>{lib.name}</Txt>
-                  <Txt tone="secondary" style={{ fontSize: '0.74rem' }}>{lib.desc}</Txt>
-                </VStk>
+                  <Txt tone="secondary" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}>{lib.desc}</Txt>
+                </HStk>
                 <IcBtn
                   variant="ghost"
                   size={28}
@@ -114,8 +124,8 @@ export function AbtVw({ store }: { store: AppStore }) {
                   <Icn name="link" size={13} />
                 </IcBtn>
               </HStk>
-            </div>
-          ))}
+            ))}
+          </VStk>
         </VStk>
       </Crd>
 
@@ -124,10 +134,10 @@ export function AbtVw({ store }: { store: AppStore }) {
         <HStk justify="space-between" align="center" gap="normal">
           <HStk gap="compact" align="center">
             <Icn name="alert" size={18} style={{ color: 'var(--system-error)' }} />
-            <VStk gap={2}>
-              <Txt weight={700} tone="error">使用声明</Txt>
-              <Txt tone="secondary" style={{ fontSize: '0.78rem' }}>仅供个人学习研究，禁止商业或侵权用途。</Txt>
-            </VStk>
+            <Txt weight={700} tone="error" style={{ whiteSpace: 'nowrap' }}>使用声明</Txt>
+            <Txt tone="secondary" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+              仅供个人学习研究，禁止商业或侵权用途。
+            </Txt>
           </HStk>
           <Btn variant="ghost" size="sm" onClick={() => setLegalOpen(true)}>
             查看完整声明

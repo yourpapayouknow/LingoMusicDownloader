@@ -99,6 +99,8 @@ body {
 
 .ui-hstack {
   flex-direction: row;
+  /* 图标与文字并排时默认垂直居中，调用方可显式覆盖 */
+  align-items: center;
 }
 
 .ui-vstack {
@@ -180,6 +182,8 @@ body {
 
 .ui-icon {
   display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .ui-avatar {
@@ -243,6 +247,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  line-height: 1;
   border: 1px solid transparent;
   cursor: pointer;
   border-radius: var(--radius-control);
@@ -250,6 +255,13 @@ body {
   min-height: 40px;
   position: relative;
   overflow: hidden;
+}
+
+.ui-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .ui-button::after {
@@ -495,7 +507,7 @@ body {
 .ui-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -678,6 +690,7 @@ body {
 .ui-badge {
   display: inline-flex;
   align-items: center;
+  vertical-align: middle;
   justify-content: center;
   min-height: 22px;
   border-radius: var(--radius-full);
