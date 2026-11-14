@@ -256,6 +256,9 @@ cd frontend
 npm run lint
 npm run build
 
+# Freeze the backend and bundle media tools
+pwsh -NoLogo -NoProfile -File .\packaging\build_backend.ps1
+
 # Build the desktop installer
 npm run tauri build
 ```

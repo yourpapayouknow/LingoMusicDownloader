@@ -1,4 +1,6 @@
 use serde::Serialize;
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 const COOKIE_HEADER_LINES: [&str; 4] = [
@@ -131,12 +133,61 @@ async fn probe_apple_music_login_cookies(
     Ok(response)
 }
 
+// 启动后端sidecar并将输出写入用户日志
+fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
+    let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let backend_dir = resource_dir.join("backend");
+    let backend_exe = backend_dir.join("run_backend.exe");
+    if !backend_exe.is_file() {
+        return Err(format!("backend executable not found: {}", backend_exe.display()));
+    }
+
+    let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(data_dir.join("backend.log"))
+        .map_err(|e| e.to_string())?;
+    let log_err = log.try_clone().map_err(|e| e.to_string())?;
+
+    Command::new(&backend_exe)
+        .current_dir(&backend_dir)
+        .env("LINGOMUSIC_DATA_DIR", &data_dir)
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err))
+        .spawn()
+        .map_err(|e| format!("failed to start backend: {e}"))
+}
+
 // 启动Tauri应用并注册Cookies探测命令
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let backend: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+    let backend_setup = backend.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(move |app| {
+            match start_backend(app.handle()) {
+                Ok(child) => {
+                    *backend_setup.lock().unwrap() = Some(child);
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![probe_apple_music_login_cookies])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(mut child) = backend.lock().unwrap().take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        });
 }

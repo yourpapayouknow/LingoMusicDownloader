@@ -8,16 +8,28 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     LOG_LEVEL: str = "INFO"
 
-    # 获取基础运行目录
+    # 获取可写数据目录
     def bsdir(self) -> str:
         if getattr(sys, "frozen", False):
+            override = os.environ.get("LINGOMUSIC_DATA_DIR")
+            if override:
+                return os.path.abspath(override)
+            local = os.environ.get("LOCALAPPDATA")
+            if local:
+                return os.path.join(local, "LingoMusicDownloader")
             return os.path.dirname(sys.executable)
         return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    # 获取打包资源根目录
+    def resdir(self) -> str:
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return self.bsdir()
 
     # 获取打包资源目录
     def bndldir(self) -> str:
         if getattr(sys, "frozen", False):
-            return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+            return getattr(sys, "_MEIPASS", self.resdir())
         return self.bsdir()
 
     # 获取Cookie文件路径
@@ -49,6 +61,7 @@ class Settings(BaseSettings):
     def bindir(self) -> str:
         candidates = [
             os.path.join(self.bndldir(), "bin"),
+            os.path.join(self.resdir(), "bin"),
             os.path.join(self.bsdir(), "bin"),
         ]
         for c in candidates:

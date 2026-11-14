@@ -52,6 +52,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/src-tauri/target/
 frontend/src-tauri/gen/
+frontend/src-tauri/backend-dist/
 
 # Archived legacy content (kept locally, recoverable from archive tag)
 old/

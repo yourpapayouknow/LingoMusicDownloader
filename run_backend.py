@@ -18,9 +18,11 @@ if project_root not in sys.path:
 # 统一依赖引用
 from backend.head import mp, uvicorn, traceback
 from backend.main import app as backend_app
+from backend.core.config import settings
 
 # 进程入口主逻辑
 if __name__ == "__main__":
+    mp.freeze_support()
     try:
         if hasattr(sys, "_base_executable"):
             sys._base_executable = sys.executable
@@ -31,7 +33,11 @@ if __name__ == "__main__":
         print("[WARN] multiprocessing executable configuration failed.", file=sys.stderr)
 
     print("Starting LingoMusic Downloader Backend...")
-    crash_log_path = os.path.join(project_root, "backend_crash.log")
+    try:
+        os.makedirs(settings.bsdir(), exist_ok=True)
+    except Exception:
+        traceback.print_exc()
+    crash_log_path = os.path.join(settings.bsdir(), "backend_crash.log")
 
     # 记录未捕获崩溃异常信息至日志文件
     def lgcrsh(msg: str) -> None:

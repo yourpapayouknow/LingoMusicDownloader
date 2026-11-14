@@ -257,6 +257,9 @@ cd frontend
 npm run lint
 npm run build
 
+# 先冻结后端并打包媒体工具
+pwsh -NoLogo -NoProfile -File .\packaging\build_backend.ps1
+
 # 构建桌面安装包
 npm run tauri build
 ```
