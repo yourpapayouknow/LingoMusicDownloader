@@ -36,8 +36,8 @@ from backend.head import (
     urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen,
 )
 
-# 复用downloader中的本地辅助常量与函数（惰性加载时downloader已初始化完毕）
-from backend.services.downloader import (
+# 复用独立的元数据服务（避免反向依赖downloader）
+from backend.services.metadata import (
     AUDIO_FORMAT_ID_BY_CODEC,
     _fetch_catalog_metadata_for_storefront,
     _align_tags_with_catalog,
@@ -73,6 +73,30 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+# 按目标地区对齐媒体标签并兜底填充缺失字段
+async def _mtalgn(iface, item: Any, media_type: str) -> None:
+    if item.partial or item.tags is None or not item.media_metadata:
+        return
+    account_sf = (getattr(iface.base.apple_music_api, "storefront", "") or "").lower()
+    target_sf = (iface._metadata_storefront or account_sf).lower()
+    target_lang = iface._metadata_language or getattr(iface.base.apple_music_api, "language", "en-US")
+    if target_sf and target_sf != account_sf:
+        catalog_id = iface.base.parse_catalog_media_id(item.media_metadata)
+        target_meta = await _fetch_catalog_metadata_for_storefront(
+            iface.base.apple_music_api,
+            media_type,
+            catalog_id,
+            target_sf,
+            target_lang,
+        )
+        if target_meta:
+            _align_tags_with_catalog(item.tags, target_meta, target_sf)
+        else:
+            _fill_missing_tags_from_catalog(item.tags, item.media_metadata)
+    else:
+        _align_tags_with_catalog(item.tags, item.media_metadata, target_sf)
 
 
 class LingoAppleMusicBaseDownloader(AppleMusicBaseDownloader):
@@ -305,7 +329,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
             playlist = self._get_playlist_from_codec(m3u8_master_data, codec)
 
         if playlist is None:
-            logger.debug("no_matching_playlist", codec=codec.value)
+            logger.debug("No matching playlist for codec=%s", codec.value)
             return None
 
         stream_info = StreamInfo(legacy=False)
@@ -365,7 +389,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
             audio_track=stream_info,
             file_format=MediaFileFormat.MP4 if is_mp4 else MediaFileFormat.M4A,
         )
-        logger.debug("get_song_stream_info success", stream_info=stream_info_av)
+        logger.debug("get_song_stream_info success: %s", stream_info_av)
         return stream_info_av
 
     # 获取Wrapper解密流m3u8地址
@@ -406,25 +430,7 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
     # 按目标元数据地区对齐歌曲标签并兜底填充缺失字段
     async def get_media(self, media: Any):
         async for item in super().get_media(media):
-            if not item.partial and item.tags is not None and item.media_metadata:
-                account_sf = (getattr(self.base.apple_music_api, "storefront", "") or "").lower()
-                target_sf = (self._metadata_storefront or account_sf).lower()
-                target_lang = self._metadata_language or getattr(self.base.apple_music_api, "language", "en-US")
-                if target_sf and target_sf != account_sf:
-                    catalog_id = self.base.parse_catalog_media_id(item.media_metadata)
-                    target_meta = await _fetch_catalog_metadata_for_storefront(
-                        self.base.apple_music_api,
-                        "songs",
-                        catalog_id,
-                        target_sf,
-                        target_lang,
-                    )
-                    if target_meta:
-                        _align_tags_with_catalog(item.tags, target_meta, target_sf)
-                    else:
-                        _fill_missing_tags_from_catalog(item.tags, item.media_metadata)
-                else:
-                    _align_tags_with_catalog(item.tags, item.media_metadata, target_sf)
+            await _mtalgn(self, item, "songs")
             yield item
 
 
@@ -463,23 +469,5 @@ class LingoAppleMusicMusicVideoInterface(AppleMusicMusicVideoInterface):
     # 按目标元数据地区对齐MV标签并兜底填充缺失字段
     async def get_media(self, media: Any):
         async for item in super().get_media(media):
-            if not item.partial and item.tags is not None and item.media_metadata:
-                account_sf = (getattr(self.base.apple_music_api, "storefront", "") or "").lower()
-                target_sf = (self._metadata_storefront or account_sf).lower()
-                target_lang = self._metadata_language or getattr(self.base.apple_music_api, "language", "en-US")
-                if target_sf and target_sf != account_sf:
-                    catalog_id = self.base.parse_catalog_media_id(item.media_metadata)
-                    target_meta = await _fetch_catalog_metadata_for_storefront(
-                        self.base.apple_music_api,
-                        "music-videos",
-                        catalog_id,
-                        target_sf,
-                        target_lang,
-                    )
-                    if target_meta:
-                        _align_tags_with_catalog(item.tags, target_meta, target_sf)
-                    else:
-                        _fill_missing_tags_from_catalog(item.tags, item.media_metadata)
-                else:
-                    _align_tags_with_catalog(item.tags, item.media_metadata, target_sf)
+            await _mtalgn(self, item, "music-videos")
             yield item

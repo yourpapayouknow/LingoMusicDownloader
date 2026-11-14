@@ -1,10 +1,10 @@
 # 核心下载调度器、多线程队列与音质转码引擎模块
 from backend.head import (
-    asyncio, copy, os, json, logging, subprocess, socket, re, shutil, tempfile,
-    unicodedata, MozillaCookieJar, Path, Dict, Any, Optional, List,
-    urljoin, urlparse, urlunparse, UrlRequest as Request, urlopen, httpx,
+    asyncio, copy, os, logging, subprocess, socket, re, shutil,
+    MozillaCookieJar, Path, Dict, Any, Optional, List,
+    urlparse, urllib, httpx,
     Retry, RetryTransport,
-    APPLE_MUSIC_AMP_API_URL, GamdlApiResponseError,
+    GamdlApiResponseError,
     AppleMusicApi, ItunesApi,
 )
 
@@ -15,6 +15,13 @@ from backend.utils.common import (
     fnmkey as _filename_key,
     strptrkprfx as _strip_track_prefix,
     fndsdcrlrc as _find_sidecar_lrc_path,
+)
+from backend.services.metadata import (
+    APPLE_MUSIC_HOMEPAGE_URL,
+    _normalize_itunes_language_tag,
+    _resolve_storefront_language_sync,
+    _resolve_storefront_language,
+    _resolve_target_metadata_region_and_language,
 )
 
 from backend.core.config import settings
@@ -44,14 +51,48 @@ SETTINGS_KEY_METADATA_REGION = "lingomusic-metadata-region"
 
 # 内存中保留的下载任务状态条目上限
 DOWNLOAD_STATUS_MAX = 50
+# 单次转码命令超时时间（秒）
+TRANSCODE_TIMEOUT_SECONDS = 600
+
+# 转码任务规格表：源编码 -> (设置键, 任务规格)
+TRANSCODE_JOB_SPECS = {
+    "aac": (
+        (SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320, {
+            "name": "aac->mp3_320k",
+            "ext": "mp3",
+            "args": ["-c:a", "libmp3lame", "-b:a", "320k"],
+        }),
+        (SETTINGS_KEY_TRANSCODE_AAC_TO_MP4, {
+            "name": "aac->mp4",
+            "ext": "mp4",
+            "args": ["-c:a", "copy"],
+        }),
+        (SETTINGS_KEY_TRANSCODE_AAC_TO_AAC_STANDARD, {
+            "name": "aac->aac_standard",
+            "ext": "m4a",
+            "args": ["-c:a", "aac", "-profile:a", "aac_low", "-b:a", "256k"],
+        }),
+    ),
+    "alac": (
+        (SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC, {
+            "name": "alac->flac",
+            "ext": "flac",
+            "args": ["-c:a", "flac"],
+        }),
+        (SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV, {
+            "name": "alac->wav",
+            "ext": "wav",
+            "args": ["-c:a", "pcm_s24le"],
+        }),
+        (SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4, {
+            "name": "alac->mp4",
+            "ext": "mp4",
+            "args": ["-c:a", "copy"],
+        }),
+    ),
+}
 
 TRANSCODE_TRUE_VALUES = {"1", "true", "yes", "on"}
-# HLS 分片的 codecs 字段用 MP4A 对象类型标识，音频资产元数据用简写标识
-AUDIO_FORMAT_ID_BY_CODEC = {
-    "mp4a.40.2": "aac",
-    "mp4a.40.5": "aach",
-}
-APPLE_MUSIC_HOMEPAGE_URL = "https://music.apple.com"
 APPLE_MUSIC_INDEX_SCRIPT_REGEX = re.compile(
     r"/(assets/index(?:-legacy)?[~-][^/\"']+\.js)"
 )
@@ -92,253 +133,6 @@ APPLE_STOREFRONT_ID_MAP = {
     "143479": "sa",
     "143481": "ae",
 }
-APPLE_STOREFRONT_LANGUAGE_MAP = {
-    "cn": "zh-CN",
-    "tw": "zh-TW",
-    "hk": "zh-HK",
-    "mo": "zh-HK",
-    "jp": "ja-JP",
-    "kr": "ko-KR",
-    "us": "en-US",
-    "gb": "en-GB",
-    "uk": "en-GB",
-    "au": "en-AU",
-    "ca": "en-CA",
-    "sg": "en-GB",
-    "in": "en-GB",
-    "ph": "en-US",
-    "de": "de-DE",
-    "fr": "fr-FR",
-    "es": "es-ES",
-    "mx": "es-MX",
-    "it": "it-IT",
-    "nl": "nl-NL",
-    "ru": "ru-RU",
-    "br": "pt-BR",
-    "pt": "pt-PT",
-    "id": "id-ID",
-    "th": "th-TH",
-    "vn": "vi-VN",
-    "my": "ms-MY",
-    "tr": "tr-TR",
-    "sa": "ar-SA",
-    "ae": "ar-AE",
-}
-CJK_PREFERRED_STOREFRONTS = {"cn", "tw", "hk", "mo", "jp", "kr"}
-GENERIC_GENRE_NAMES = {"music", "音乐", "音樂", "ミュージック", "음악"}
-
-
-# 将BCP-47语言标签规整为Apple Music与iTunes兼容格式
-def _normalize_itunes_language_tag(tag: Optional[str]) -> str:
-    raw = (tag or "").strip().replace("_", "-")
-    if not raw:
-        return "en-US"
-    lower = raw.lower()
-    if lower.startswith("zh-hans") or lower in {"zh", "zh-cn"}:
-        return "zh-CN"
-    if lower.startswith("zh-hant-hk") or lower == "zh-hk":
-        return "zh-HK"
-    if lower.startswith("zh-hant") or lower == "zh-tw":
-        return "zh-TW"
-    if lower == "ja":
-        return "ja-JP"
-    if lower == "ko":
-        return "ko-KR"
-    if lower in {"en-in", "en-sg"}:
-        return "en-GB"
-    return raw
-
-
-# 按Storefront代号同步解析默认元数据语言
-def _resolve_storefront_language_sync(storefront: Optional[str]) -> str:
-    sf = (storefront or "").strip().lower()
-    return APPLE_STOREFRONT_LANGUAGE_MAP.get(sf, "en-US")
-
-
-# 异步探测并确定账户Storefront对应的元数据语言
-async def _resolve_storefront_language(
-    storefront: Optional[str],
-    token: Optional[str] = None,
-    media_user_token: Optional[str] = None,
-) -> str:
-    sf = (storefront or "").strip().lower()
-    if not sf:
-        return "en-US"
-    if sf in APPLE_STOREFRONT_LANGUAGE_MAP:
-        return APPLE_STOREFRONT_LANGUAGE_MAP[sf]
-
-    if token:
-        headers = {
-            "authorization": f"Bearer {token}",
-            "origin": APPLE_MUSIC_HOMEPAGE_URL,
-        }
-        if media_user_token:
-            headers["cookie"] = f"media-user-token={media_user_token}"
-        try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                resp = await client.get(
-                    f"{APPLE_MUSIC_AMP_API_URL}/v1/storefronts/{sf}",
-                    headers=headers,
-                )
-                if resp.status_code == 200:
-                    data = resp.json().get("data", [])
-                    if data and isinstance(data[0], dict):
-                        default_lang = data[0].get("attributes", {}).get("defaultLanguageTag")
-                        if default_lang:
-                            return _normalize_itunes_language_tag(default_lang)
-        except Exception as e:
-            logger.debug("Storefront language lookup failed for %s: %s", sf, e)
-
-    return _resolve_storefront_language_sync(sf)
-
-
-# 解析最终生效的元数据区域与语言标签
-async def _resolve_target_metadata_region_and_language(
-    account_storefront: Optional[str],
-    requested_region: Optional[str],
-    token: Optional[str] = None,
-    media_user_token: Optional[str] = None,
-) -> tuple[str, str]:
-    raw_region = (requested_region or "").strip().lower()
-    base_sf = (account_storefront or "cn").strip().lower() or "cn"
-    target_sf = base_sf if (not raw_region or raw_region == "auto") else raw_region
-    target_lang = await _resolve_storefront_language(
-        target_sf,
-        token=token,
-        media_user_token=media_user_token,
-    )
-    return target_sf, target_lang
-
-
-# 拉取指定Storefront区域下的目录媒体元数据
-async def _fetch_catalog_metadata_for_storefront(
-    apple_music_api: Any,
-    media_type: str,
-    media_id: str,
-    target_storefront: str,
-    target_language: str,
-) -> Optional[Dict[str, Any]]:
-    if not apple_music_api or not media_id or not target_storefront:
-        return None
-    try:
-        payload = await apple_music_api._amp_request(
-            f"/v1/catalog/{target_storefront}/{media_type}/{media_id}",
-            {"l": target_language},
-        )
-        data = payload.get("data", []) if isinstance(payload, dict) else []
-        if data and isinstance(data[0], dict):
-            return data[0]
-    except Exception as e:
-        logger.debug(
-            "Target storefront catalog lookup skipped (%s/%s/%s): %s",
-            target_storefront,
-            media_type,
-            media_id,
-            e,
-        )
-    return None
-
-
-# 从目录属性提取首选非泛化流派名称
-def _pick_catalog_genre(genre_names: Any) -> Optional[str]:
-    if not isinstance(genre_names, list):
-        return None
-    cleaned = [str(g).strip() for g in genre_names if isinstance(g, str) and g.strip()]
-    for g in cleaned:
-        if g.lower() not in GENERIC_GENRE_NAMES:
-            return g
-    return cleaned[0] if cleaned else None
-
-
-# 判断流媒体标签是否应替换为目标区域目录本地化文本
-def _should_use_catalog_text(
-    tag_value: Optional[str],
-    catalog_value: Optional[str],
-    storefront: Optional[str],
-) -> bool:
-    cat_text = (catalog_value or "").strip()
-    if not cat_text:
-        return False
-    cur_text = (tag_value or "").strip()
-    if not cur_text:
-        return True
-    if cur_text == cat_text:
-        return False
-    sf = (storefront or "").strip().lower()
-    if sf in CJK_PREFERRED_STOREFRONTS:
-        if cur_text.isascii() and not cat_text.isascii():
-            return True
-        if sf in {"cn", "tw", "hk", "mo"} and not cat_text.isascii():
-            return True
-    elif sf:
-        if not cur_text.isascii() and cat_text.isascii():
-            return True
-    return False
-
-
-# 仅填补缺失或为空的元数据标签字段
-def _fill_missing_tags_from_catalog(
-    tags: Any,
-    media_metadata: Optional[Dict[str, Any]],
-) -> None:
-    if tags is None or not isinstance(media_metadata, dict):
-        return
-    attrs = media_metadata.get("attributes")
-    if not isinstance(attrs, dict):
-        return
-    if not (getattr(tags, "title", None) or "").strip() and attrs.get("name"):
-        tags.title = attrs["name"]
-    if not (getattr(tags, "artist", None) or "").strip() and attrs.get("artistName"):
-        tags.artist = attrs["artistName"]
-    if not (getattr(tags, "album", None) or "").strip() and attrs.get("albumName"):
-        tags.album = attrs["albumName"]
-    if not (getattr(tags, "album_artist", None) or "").strip() and attrs.get("albumArtistName"):
-        tags.album_artist = attrs["albumArtistName"]
-    if not (getattr(tags, "genre", None) or "").strip():
-        cat_genre = _pick_catalog_genre(attrs.get("genreNames"))
-        if cat_genre:
-            tags.genre = cat_genre
-
-
-# 使用账户区Apple Music目录元数据兜底对齐标签
-def _align_tags_with_catalog(
-    tags: Any,
-    media_metadata: Optional[Dict[str, Any]],
-    storefront: Optional[str],
-) -> None:
-    if tags is None or not isinstance(media_metadata, dict):
-        return
-    attrs = media_metadata.get("attributes")
-    if not isinstance(attrs, dict):
-        return
-
-    cat_title = attrs.get("name")
-    if _should_use_catalog_text(getattr(tags, "title", None), cat_title, storefront):
-        tags.title = cat_title
-        if hasattr(tags, "title_sort"):
-            tags.title_sort = cat_title
-
-    cat_artist = attrs.get("artistName")
-    if _should_use_catalog_text(getattr(tags, "artist", None), cat_artist, storefront):
-        tags.artist = cat_artist
-        if hasattr(tags, "artist_sort"):
-            tags.artist_sort = cat_artist
-
-    cat_album = attrs.get("albumName")
-    if _should_use_catalog_text(getattr(tags, "album", None), cat_album, storefront):
-        tags.album = cat_album
-        if hasattr(tags, "album_sort"):
-            tags.album_sort = cat_album
-
-    cat_album_artist = attrs.get("albumArtistName")
-    if _should_use_catalog_text(getattr(tags, "album_artist", None), cat_album_artist, storefront):
-        tags.album_artist = cat_album_artist
-
-    cat_genre = _pick_catalog_genre(attrs.get("genreNames"))
-    if _should_use_catalog_text(getattr(tags, "genre", None), cat_genre, storefront):
-        tags.genre = cat_genre
-
-
 # 从Cookies中提取media-user-token
 def _load_media_user_token_from_cookies(cookies_path: str) -> str:
     cookies = MozillaCookieJar(cookies_path)
@@ -551,33 +345,23 @@ def _install_legacy_music_video_metadata_fallback(api: AppleMusicApi) -> None:
     api.get_music_video = get_music_video_with_itunes_fallback
 
 
-def _configure_proxy_aware_client(api: AppleMusicApi) -> None:
-    """
-    httpx.AsyncClient with RetryTransport sets allow_env_proxies=False,
-    which ignores system/environment HTTP proxies (e.g. 10.1.1.1:7897 / 127.0.0.1:7890).
-    This causes amp-api.music.apple.com to hang and timeout in proxy environments.
-    We detect the underlying proxy transport from a clean AsyncClient and wrap it
-    with RetryTransport, ensuring both proxy support and retries work properly.
-    """
+# 为Apple Music API替换支持环境代理与重试的HTTP客户端
+async def _configure_proxy_aware_client(api: AppleMusicApi) -> None:
     try:
-        temp_client = httpx.AsyncClient()
-        target_transport = None
-        for pattern, trans in temp_client._mounts.items():
-            if trans and pattern.matches(httpx.URL(APPLE_MUSIC_AMP_API_URL)):
-                target_transport = trans
-                break
-        if target_transport is None:
-            target_transport = temp_client._transport
+        old_client = api.client
+        proxy_map = urllib.request.getproxies()
+        proxy_url = proxy_map.get("https") or proxy_map.get("http") or proxy_map.get("all")
+        transport = httpx.AsyncHTTPTransport(proxy=proxy_url) if proxy_url else httpx.AsyncHTTPTransport()
 
         retry_transport = RetryTransport(
-            transport=target_transport,
+            transport=transport,
             retry=Retry(
                 total=6,
                 backoff_factor=1,
                 status_forcelist=[429, 500, 502, 503, 504],
             ),
         )
-        headers = dict(api.client.headers)
+        headers = dict(old_client.headers) if old_client is not None else {}
         if api.media_user_token and "cookie" not in headers:
             headers["cookie"] = f"media-user-token={api.media_user_token}"
         api.client = httpx.AsyncClient(
@@ -585,6 +369,11 @@ def _configure_proxy_aware_client(api: AppleMusicApi) -> None:
             transport=retry_transport,
             timeout=30.0,
         )
+        if old_client is not None and old_client is not api.client:
+            try:
+                await old_client.aclose()
+            except Exception:
+                logger.debug("Failed to close previous Apple Music HTTP client", exc_info=True)
     except Exception as e:
         logger.warning("Failed to configure proxy-aware client for AppleMusicApi: %s", e)
 
@@ -624,7 +413,7 @@ async def _create_apple_music_api_from_legacy_wrapper() -> AppleMusicApi:
     api.account_info = _synthetic_account_info(api.storefront)
     api._lingo_legacy_wrapper_fallback = True
     api.client.headers.update({"cookie": f"media-user-token={media_user_token}"})
-    _configure_proxy_aware_client(api)
+    await _configure_proxy_aware_client(api)
     _install_legacy_music_video_metadata_fallback(api)
     return api
 
@@ -735,69 +524,24 @@ def _detect_source_codec(file_path: str, preferred_codec: str, ffprobe_path: Opt
         except Exception as e:
             logger.warning("Failed to probe codec via ffprobe: %s | file=%s", e, file_path)
 
-    if normalized_preferred in {"aac", "alac"}:
-        return normalized_preferred
-
     return normalized_preferred
 
 
 # 根据当前配置构建音频转码任务列表
 def _build_transcode_jobs(source_codec: str, all_settings: Dict[str, Any]) -> List[Dict[str, Any]]:
-    jobs: List[Dict[str, Any]] = []
-
-    if source_codec == "aac":
-        if _setting_enabled(all_settings.get(SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320)):
-            jobs.append({
-                "name": "aac->mp3_320k",
-                "ext": "mp3",
-                "args": ["-c:a", "libmp3lame", "-b:a", "320k"],
-            })
-        if _setting_enabled(all_settings.get(SETTINGS_KEY_TRANSCODE_AAC_TO_MP4)):
-            jobs.append({
-                "name": "aac->mp4",
-                "ext": "mp4",
-                "args": ["-c:a", "copy"],
-            })
-        if _setting_enabled(all_settings.get(SETTINGS_KEY_TRANSCODE_AAC_TO_AAC_STANDARD)):
-            jobs.append({
-                "name": "aac->aac_standard",
-                "ext": "m4a",
-                "args": ["-c:a", "aac", "-profile:a", "aac_low", "-b:a", "256k"],
-            })
-    elif source_codec == "alac":
-        if _setting_enabled(all_settings.get(SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC)):
-            jobs.append({
-                "name": "alac->flac",
-                "ext": "flac",
-                "args": ["-c:a", "flac"],
-            })
-        if _setting_enabled(all_settings.get(SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV)):
-            jobs.append({
-                "name": "alac->wav",
-                "ext": "wav",
-                "args": ["-c:a", "pcm_s24le"],
-            })
-        if _setting_enabled(all_settings.get(SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4)):
-            jobs.append({
-                "name": "alac->mp4",
-                "ext": "mp4",
-                "args": ["-c:a", "copy"],
-            })
-
-    return jobs
+    return [
+        dict(spec) for key, spec in TRANSCODE_JOB_SPECS.get(source_codec, ())
+        if _setting_enabled(all_settings.get(key))
+    ]
 
 
 # 判断当前是否启用了任何音质转码任务
 def _has_transcode_enabled(all_settings: Dict[str, Any]) -> bool:
-    keys = (
-        SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320,
-        SETTINGS_KEY_TRANSCODE_AAC_TO_MP4,
-        SETTINGS_KEY_TRANSCODE_AAC_TO_AAC_STANDARD,
-        SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC,
-        SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV,
-        SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4,
+    return any(
+        _setting_enabled(all_settings.get(key))
+        for specs in TRANSCODE_JOB_SPECS.values()
+        for key, _ in specs
     )
-    return any(_setting_enabled(all_settings.get(key)) for key in keys)
 
 
 # 构造转码产物在目标目录的绝对路径
@@ -824,20 +568,12 @@ def is_wsl_port_ready(port: int) -> bool:
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
-# 确保WSL解密服务桥接通道处于可用状态
-async def ensure_wsl_bridge():
-    if is_wsl_port_ready(10020):
-        return True
-    try:
-        logger.info("WSL decrypt port not ready, attempting to start via WSL...")
-        subprocess.Popen(
-            ["wsl", "sh", "-c", "python3 /root/decrypt_server.py"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-    except Exception as e:
-        logger.error(f"Failed to auto-start WSL decrypt server: {e}")
-        return False
+# 检查WSL Wrapper解密端口是否可用（由Wrapper服务负责启动）
+async def ensure_wsl_bridge() -> bool:
+    ready = await asyncio.to_thread(is_wsl_port_ready, 10020)
+    if not ready:
+        logger.warning("WSL decrypt port 10020 is not ready; Wrapper-based downloads may fail.")
+    return ready
 
 
 
@@ -883,7 +619,10 @@ def _extract_media_metadata(item: Any, source_url: str) -> Dict[str, Any]:
         or _safe_map_get(play_params, "id")
     )
     if track_id is None or str(track_id).strip() == "":
-        track_id = source_url.split("/")[-1].split("?")[0]
+        parsed_url = urlparse(source_url)
+        query_id = (parse_qs(parsed_url.query).get("i") or [""])[0]
+        path_parts = [part for part in parsed_url.path.split("/") if part]
+        track_id = query_id or (path_parts[-1] if path_parts else "")
     track_id = str(track_id)
 
     title = (
@@ -955,10 +694,10 @@ class DownloadManager:
         async with self._init_lock:
             if self.is_initialized:
                 return True
-            return await self.initialize()
+            return await self._intlz()
 
-    # 初始化Apple Music下载引擎及鉴权客户端
-    async def initialize(self):
+    # 初始化Apple Music下载引擎及鉴权客户端（调用方需持有初始化锁）
+    async def _intlz(self):
         if not os.path.exists(settings.ckspth()):
             logger.error(f"Cookies file not found at {settings.ckspth()}")
             return False
@@ -980,7 +719,7 @@ class DownloadManager:
                         media_user_token=media_user_token,
                         token=access_token,
                     )
-                    _configure_proxy_aware_client(self.apple_music_api)
+                    await _configure_proxy_aware_client(self.apple_music_api)
                     if not self.apple_music_api.active_subscription:
                         init_errors.append("No active Apple Music subscription found.")
                         self.apple_music_api = None
@@ -1022,15 +761,9 @@ class DownloadManager:
             logger.error(f"Failed to initialize Gamdl downloader: {e}")
             return False
 
-    # 根据格式、设备环境与元数据地区配置构建下载器实例
-    async def _create_downloader(
-        self,
-        codec: str,
-        video_resolution: str,
-        use_wrapper: bool,
-        metadata_region: Optional[str] = None,
-    ):
-        all_settings = get_all_settings()
+    # 解析元数据地区并构造本地化API副本
+    async def _mdctx(self, metadata_region: Optional[str]):
+        all_settings = await asyncio.to_thread(get_all_settings)
         requested_region = (
             metadata_region
             if metadata_region is not None
@@ -1047,8 +780,16 @@ class DownloadManager:
         # 克隆共享API实例以在不干扰账号播放区域的前提下切换元数据语言
         localized_api = copy.copy(self.apple_music_api)
         localized_api.language = target_lang
+        return account_sf, target_sf, target_lang, localized_api
 
-        cleanup_clients: List[Any] = []
+    # 创建账号地区与目标地区的iTunes客户端并登记清理列表
+    async def _itnapi(
+        self,
+        account_sf: str,
+        target_sf: str,
+        target_lang: str,
+        cleanup_clients: List[Any],
+    ):
         account_itunes_api = await ItunesApi.create(
             storefront=account_sf,
             language=target_lang,
@@ -1067,12 +808,26 @@ class DownloadManager:
                 cleanup_clients.append(metadata_itunes_api.client)
             except Exception as e:
                 logger.warning("Failed to create target iTunes API (%s): %s", target_sf, e)
+        return account_itunes_api, metadata_itunes_api
 
-        rt = gamdlrt()
-        base_interface = await rt.AppleMusicBaseInterface.create(
+    # 装配歌曲、MV与上传视频接口
+    async def _ifaces(
+        self,
+        rt,
+        localized_api,
+        account_itunes_api,
+        metadata_itunes_api,
+        target_sf: str,
+        target_lang: str,
+        codec: str,
+        video_resolution: str,
+        use_wrapper: bool,
+    ):
+        rt_ifaces = rt
+        base_interface = await rt_ifaces.AppleMusicBaseInterface.create(
             apple_music_api=localized_api,
             itunes_api=account_itunes_api,
-            use_wrapper=use_wrapper
+            use_wrapper=use_wrapper,
         )
 
         try:
@@ -1081,33 +836,34 @@ class DownloadManager:
             song_codec_enum = _resolve_song_codec_enum("aac-legacy")
 
         try:
-            video_res_enum = rt.MusicVideoResolution(video_resolution)
+            video_res_enum = rt_ifaces.MusicVideoResolution(video_resolution)
         except ValueError:
-            video_res_enum = rt.MusicVideoResolution.R1080P
+            video_res_enum = rt_ifaces.MusicVideoResolution.R1080P
 
-        song_interface = rt.LingoAppleMusicSongInterface(
+        song_interface = rt_ifaces.LingoAppleMusicSongInterface(
             base=base_interface,
             codec_priority=[song_codec_enum],
             metadata_storefront=target_sf,
             metadata_language=target_lang,
         )
-        music_video_interface = rt.LingoAppleMusicMusicVideoInterface(
+        music_video_interface = rt_ifaces.LingoAppleMusicMusicVideoInterface(
             base=base_interface,
             resolution=video_res_enum,
             metadata_storefront=target_sf,
             metadata_language=target_lang,
             metadata_itunes_api=metadata_itunes_api,
         )
-        uploaded_video_interface = rt.AppleMusicUploadedVideoInterface(
+        uploaded_video_interface = rt_ifaces.AppleMusicUploadedVideoInterface(
             base=base_interface,
         )
-
-        interface = rt.AppleMusicInterface(
+        return rt_ifaces.AppleMusicInterface(
             song=song_interface,
             music_video=music_video_interface,
             uploaded_video=uploaded_video_interface,
         )
 
+    # 组装gamdl下载器与各媒体下载子组件
+    def _asmdl(self, rt, interface):
         nm3u8_binary = shutil.which("N_m3u8DL-RE") or shutil.which("N_m3u8DL-RE.exe")
         download_mode = rt.DownloadMode.NM3U8DLRE if nm3u8_binary else rt.DownloadMode.YTDLP
 
@@ -1120,17 +876,48 @@ class DownloadManager:
             download_mode=download_mode,
         )
 
-        song_downloader = rt.AppleMusicSongDownloader(base=base_downloader)
-        music_video_downloader = rt.AppleMusicMusicVideoDownloader(base=base_downloader)
-        uploaded_video_downloader = rt.AppleMusicUploadedVideoDownloader(base=base_downloader)
-
-        downloader = rt.AppleMusicDownloader(
-            song=song_downloader,
-            music_video=music_video_downloader,
-            uploaded_video=uploaded_video_downloader,
+        return rt.AppleMusicDownloader(
+            song=rt.AppleMusicSongDownloader(base=base_downloader),
+            music_video=rt.AppleMusicMusicVideoDownloader(base=base_downloader),
+            uploaded_video=rt.AppleMusicUploadedVideoDownloader(base=base_downloader),
         )
-        downloader._lingo_cleanup_clients = cleanup_clients
-        return downloader
+
+    # 根据格式、设备环境与元数据地区配置构建下载器实例
+    async def _create_downloader(
+        self,
+        codec: str,
+        video_resolution: str,
+        use_wrapper: bool,
+        metadata_region: Optional[str] = None,
+    ):
+        cleanup_clients: List[Any] = []
+        try:
+            account_sf, target_sf, target_lang, localized_api = await self._mdctx(metadata_region)
+            account_itunes_api, metadata_itunes_api = await self._itnapi(
+                account_sf, target_sf, target_lang, cleanup_clients
+            )
+            rt = gamdlrt()
+            interface = await self._ifaces(
+                rt,
+                localized_api,
+                account_itunes_api,
+                metadata_itunes_api,
+                target_sf,
+                target_lang,
+                codec,
+                video_resolution,
+                use_wrapper,
+            )
+            downloader = self._asmdl(rt, interface)
+            downloader._lingo_cleanup_clients = cleanup_clients
+            return downloader
+        except Exception:
+            for client in cleanup_clients:
+                try:
+                    await client.aclose()
+                except Exception:
+                    pass
+            raise
 
     # 将指定URL加入后台异步下载任务队列
     async def add_to_queue(
@@ -1145,6 +932,11 @@ class DownloadManager:
             logger.error("Downloader not initialized. Please check cookies.txt")
             return False
 
+        existing = self.download_status.get(url)
+        if existing and existing.get("status") in {"pending", "processing", "downloading"}:
+            logger.warning("Duplicate in-flight download rejected: %s", url)
+            return False
+
         self.download_status[url] = {
             "status": "pending",
             "items": [],
@@ -1152,74 +944,163 @@ class DownloadManager:
             "resolution": video_resolution
         }
 
-        downloader = await self._create_downloader(
-            codec,
-            video_resolution,
-            use_wrapper,
-            metadata_region=metadata_region,
-        )
+        try:
+            downloader = await self._create_downloader(
+                codec,
+                video_resolution,
+                use_wrapper,
+                metadata_region=metadata_region,
+            )
+        except Exception as e:
+            logger.exception("Failed to create downloader for %s", url)
+            self.download_status[url]["status"] = "error"
+            self.download_status[url]["error"] = str(e)
+            return False
+
         task = asyncio.create_task(self._process_url(downloader, url))
         # Keep a strong reference so GC cannot destroy the task before it finishes.
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return True
 
+    # 预检URL并收集可下载队列与预检错误项
+    async def _prefl(self, downloader, url: str):
+        rt = gamdlrt()
+        download_queue: List[Dict[str, Any]] = []
+        preflight_error_items: List[Dict[str, Any]] = []
+
+        async for item in downloader.get_download_item_from_url(url):
+            if item.media.error:
+                error_obj = item.media.error
+                error_message = str(error_obj) or "Unknown media resolution error"
+                logger.warning("Skip unresolved media item from interface: %s", error_message)
+
+                if isinstance(error_obj, rt.GamdlInterfaceFormatNotAvailableError):
+                    hint = "该曲目不提供当前音质，已跳过并继续下载其他曲目。"
+                elif isinstance(error_obj, GamdlApiResponseError):
+                    hint = _get_api_error_hint(error_obj.status_code)
+                else:
+                    hint = "该曲目解析失败，已跳过并继续下载其他曲目。"
+
+                error_meta = _extract_media_metadata(item, url)
+                error_item = {
+                    "status": "error",
+                    "track_id": error_meta["track_id"],
+                    "name": error_meta["name"],
+                    "artist_name": error_meta["artist_name"],
+                    "album_name": error_meta["album_name"],
+                    "artwork_url": error_meta["artwork_url"],
+                    "file_path": "",
+                    "error": error_message,
+                    "hint": hint,
+                }
+                preflight_error_items.append(error_item)
+                self.download_status[url]["items"].append(error_item)
+                continue
+
+            if item.final_path is None or item.media.partial:
+                continue
+            meta = _extract_media_metadata(item, url)
+            self.download_status[url]["items"].append({
+                "status": "pending",
+                "track_id": meta["track_id"],
+                "name": meta["name"],
+            })
+            status_index = len(self.download_status[url]["items"]) - 1
+            download_queue.append({
+                "item": item,
+                "status_index": status_index,
+            })
+
+        return download_queue, preflight_error_items
+
+    # 设置单条下载项错误状态
+    def _setierr(self, url: str, index: int, message: str, hint: Optional[str] = None) -> None:
+        item = self.download_status[url]["items"][index]
+        item["status"] = "error"
+        item["error"] = message
+        if hint:
+            item["hint"] = hint
+
+    # 下载单条队列项并更新状态
+    async def _dnlitm(self, downloader, url: str, queued: Dict[str, Any]) -> None:
+        rt = gamdlrt()
+        item = queued["item"]
+        index = queued["status_index"]
+        if index >= len(self.download_status[url]["items"]):
+            logger.error("Download item index out of range: %s", index)
+            return
+        self.download_status[url]["items"][index]["status"] = "downloading"
+        try:
+            await downloader.download(item)
+            metadata = _extract_media_metadata(item, url)
+            self._mark_item_completed(url, index, metadata)
+            self._insert_history_safe(url, metadata)
+            await asyncio.to_thread(self._run_transcode_pipeline_safe, url, metadata)
+        except rt.GamdlDownloaderMediaFileExistsError as e:
+            metadata = _extract_media_metadata(item, url)
+            self._mark_item_completed(url, index, metadata)
+            self.download_status[url]["items"][index]["hint"] = "本地文件已存在，跳过重复下载并已写入历史记录"
+            self.download_status[url]["items"][index]["already_exists"] = True
+            logger.info("Skip existing media file: %s", e)
+            self._insert_history_safe(url, metadata)
+            await asyncio.to_thread(self._run_transcode_pipeline_safe, url, metadata)
+        except GamdlApiResponseError as e:
+            detail = f"{e.message}"
+            if e.status_code:
+                detail += f" [HTTP {e.status_code}]"
+            if e.content:
+                detail += f" | Response: {str(e.content)[:300]}"
+            logger.error("Apple Music API error: %s", detail)
+            self._setierr(url, index, detail, _get_api_error_hint(e.status_code))
+        except rt.GamdlInterfaceDecryptionNotAvailableError:
+            msg = (
+                "Decryption not available. Wrapper may be expired or not fully ready. "
+                "Please restart Wrapper and re-login, then retry."
+            )
+            logger.error(msg)
+            self._setierr(url, index, msg)
+        except rt.GamdlInterfaceFormatNotAvailableError:
+            msg = "Format/codec not available for this track (try a different codec)."
+            logger.error(msg)
+            self._setierr(url, index, msg)
+        except Exception as e:
+            logger.error("Error downloading item: %s", e, exc_info=True)
+            self._setierr(url, index, str(e))
+
+    # 汇总任务终态并处理部分成功
+    def _aggtsk(self, url: str) -> None:
+        items = self.download_status[url]["items"]
+        for child in items:
+            if child.get("status") in {"pending", "downloading"}:
+                child["status"] = "error"
+                if not child.get("error"):
+                    child["error"] = "Download did not finish for this item."
+
+        completed_count = sum(1 for child in items if child.get("status") == "completed")
+        error_count = sum(1 for child in items if child.get("status") == "error")
+        if completed_count > 0:
+            self.download_status[url]["status"] = "completed"
+            if error_count > 0:
+                self.download_status[url]["warning"] = f"{error_count} track(s) skipped or failed."
+                for child in items:
+                    if child.get("status") == "error" and child.get("error"):
+                        self.download_status[url]["error"] = child.get("error")
+                        break
+        elif error_count > 0:
+            self.download_status[url]["status"] = "error"
+            for child in items:
+                if child.get("status") == "error" and child.get("error"):
+                    self.download_status[url]["error"] = child.get("error")
+                    break
+        else:
+            self.download_status[url]["status"] = "completed"
+
     # 驱动单任务解析与分步执行下载流程
     async def _process_url(self, downloader, url: str):
-        rt = gamdlrt()
         try:
             self.download_status[url]["status"] = "processing"
-            download_queue: List[Dict[str, Any]] = []
-            preflight_error_items: List[Dict[str, Any]] = []
-
-            async for item in downloader.get_download_item_from_url(url):
-                # Check for errors yielding from the downloader interface first
-                if item.media.error:
-                    error_obj = item.media.error
-                    error_message = str(error_obj) or "Unknown media resolution error"
-                    logger.warning("Skip unresolved media item from interface: %s", error_message)
-
-                    # Keep album/playlist progress usable even when some tracks do not
-                    # expose the requested codec (for example partial ALAC availability).
-                    if isinstance(error_obj, rt.GamdlInterfaceFormatNotAvailableError):
-                        hint = "该曲目不提供当前音质，已跳过并继续下载其他曲目。"
-                    elif isinstance(error_obj, GamdlApiResponseError):
-                        hint = _get_api_error_hint(error_obj.status_code)
-                    else:
-                        hint = "该曲目解析失败，已跳过并继续下载其他曲目。"
-
-                    error_meta = _extract_media_metadata(item, url)
-                    error_item = {
-                        "status": "error",
-                        "track_id": error_meta["track_id"],
-                        "name": error_meta["name"],
-                        "artist_name": error_meta["artist_name"],
-                        "album_name": error_meta["album_name"],
-                        "artwork_url": error_meta["artwork_url"],
-                        "file_path": "",
-                        "error": error_message,
-                        "hint": hint,
-                    }
-                    preflight_error_items.append(error_item)
-                    self.download_status[url]["items"].append(error_item)
-                    continue
-                
-                # gamdl interface generators yield a *partial* item first
-                # (media.partial=True, final_path=None) as a progress signal.
-                # Only queue items that are fully resolved.
-                if item.final_path is None or item.media.partial:
-                    continue
-                meta = _extract_media_metadata(item, url)
-                self.download_status[url]["items"].append({
-                    "status": "pending",
-                    "track_id": meta["track_id"],
-                    "name": meta["name"],
-                })
-                status_index = len(self.download_status[url]["items"]) - 1
-                download_queue.append({
-                    "item": item,
-                    "status_index": status_index,
-                })
+            download_queue, preflight_error_items = await self._prefl(downloader, url)
 
             if not download_queue:
                 if preflight_error_items:
@@ -1229,92 +1110,12 @@ class DownloadManager:
                 raise ValueError("No downloadable tracks/videos found. The URL might be invalid or restricted.")
 
             self.download_status[url]["status"] = "downloading"
-
             for queued in download_queue:
-                item = queued["item"]
-                index = queued["status_index"]
-                if index >= len(self.download_status[url]["items"]):
-                    logger.error("Download item index out of range: %s", index)
-                    continue
-                self.download_status[url]["items"][index]["status"] = "downloading"
-                try:
-                    await downloader.download(item)
-                    metadata = _extract_media_metadata(item, url)
-                    self._mark_item_completed(url, index, metadata)
-                    self._insert_history_safe(url, metadata)
-                    await asyncio.to_thread(self._run_transcode_pipeline_safe, url, metadata)
-                except rt.GamdlDownloaderMediaFileExistsError as e:
-                    # Existing local file should not fail album/playlist downloads.
-                    metadata = _extract_media_metadata(item, url)
-                    self._mark_item_completed(url, index, metadata)
-                    self.download_status[url]["items"][index]["hint"] = "本地文件已存在，跳过重复下载并已写入历史记录"
-                    self.download_status[url]["items"][index]["already_exists"] = True
-                    logger.info("Skip existing media file: %s", e)
-                    self._insert_history_safe(url, metadata)
-                    await asyncio.to_thread(self._run_transcode_pipeline_safe, url, metadata)
-                        
-                except GamdlApiResponseError as e:
-                    # Extract HTTP detail from the Apple Music API error
-                    detail = f"{e.message}"
-                    if e.status_code:
-                        detail += f" [HTTP {e.status_code}]"
-                    if e.content:
-                        detail += f" | Response: {str(e.content)[:300]}"
-                    logger.error(f"Apple Music API error: {detail}")
-                    hint = _get_api_error_hint(e.status_code)
-                    self.download_status[url]["items"][index]["status"] = "error"
-                    self.download_status[url]["items"][index]["error"] = detail
-                    self.download_status[url]["items"][index]["hint"] = hint
-                except rt.GamdlInterfaceDecryptionNotAvailableError as e:
-                    msg = (
-                        "Decryption not available. Wrapper may be expired or not fully ready. "
-                        "Please restart Wrapper and re-login, then retry."
-                    )
-                    logger.error(msg)
-                    self.download_status[url]["items"][index]["status"] = "error"
-                    self.download_status[url]["items"][index]["error"] = msg
-                except rt.GamdlInterfaceFormatNotAvailableError as e:
-                    msg = "Format/codec not available for this track (try a different codec)."
-                    logger.error(msg)
-                    self.download_status[url]["items"][index]["status"] = "error"
-                    self.download_status[url]["items"][index]["error"] = msg
-                except Exception as e:
-                    logger.error(f"Error downloading item: {e}", exc_info=True)
-                    self.download_status[url]["items"][index]["status"] = "error"
-                    self.download_status[url]["items"][index]["error"] = str(e)
+                await self._dnlitm(downloader, url, queued)
 
-            # Defensive finalization: no child should remain pending/downloading
-            # once the queue loop has completed.
-            for child in self.download_status[url]["items"]:
-                if child.get("status") in {"pending", "downloading"}:
-                    child["status"] = "error"
-                    if not child.get("error"):
-                        child["error"] = "Download did not finish for this item."
-
-            # Keep task usable for albums/playlists with partial availability:
-            # if at least one item completed, mark the task completed.
-            items = self.download_status[url]["items"]
-            completed_count = sum(1 for child in items if child.get("status") == "completed")
-            error_count = sum(1 for child in items if child.get("status") == "error")
-            if completed_count > 0:
-                self.download_status[url]["status"] = "completed"
-                if error_count > 0:
-                    self.download_status[url]["warning"] = f"{error_count} track(s) skipped or failed."
-                    for child in items:
-                        if child.get("status") == "error" and child.get("error"):
-                            self.download_status[url]["error"] = child.get("error")
-                            break
-            elif error_count > 0:
-                self.download_status[url]["status"] = "error"
-                for child in items:
-                    if child.get("status") == "error" and child.get("error"):
-                        self.download_status[url]["error"] = child.get("error")
-                        break
-            else:
-                self.download_status[url]["status"] = "completed"
-
+            self._aggtsk(url)
         except Exception as e:
-            logger.error(f"Error processing url {url}: {e}", exc_info=True)
+            logger.error("Error processing url %s: %s", url, e, exc_info=True)
             self.download_status[url]["status"] = "error"
             self.download_status[url]["error"] = str(e)
         finally:
@@ -1422,7 +1223,21 @@ class DownloadManager:
                 *job["args"],
                 str(output_path),
             ]
-            proc = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=False)
+            try:
+                proc = subprocess.run(
+                    ffmpeg_cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=TRANSCODE_TIMEOUT_SECONDS,
+                )
+            except subprocess.TimeoutExpired:
+                logger.error(
+                    "Transcode timed out (%s): %s",
+                    job["name"],
+                    source_path,
+                )
+                continue
             if proc.returncode != 0:
                 logger.error(
                     "Transcode failed (%s): %s | stderr=%s",
