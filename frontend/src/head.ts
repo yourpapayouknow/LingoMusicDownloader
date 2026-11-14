@@ -189,3 +189,8 @@ export async function ldtrwbvw() {
 export async function ldtrcore() {
   return import('@tauri-apps/api/core')
 }
+
+// 动态加载Tauri外部链接打开模块
+export async function ldopn() {
+  return import('@tauri-apps/plugin-opener')
+}

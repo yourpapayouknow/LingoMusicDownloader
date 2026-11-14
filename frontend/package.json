@@ -13,6 +13,7 @@
   "dependencies": {
     "@mingcute/react": "^3.1.0",
     "@tauri-apps/api": "^2.1.0",
+    "@tauri-apps/plugin-opener": "^2.7.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

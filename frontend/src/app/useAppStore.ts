@@ -13,7 +13,7 @@ import {
   type WrapperSetupPrecheckResponse, type WrapperSetupStatusResponse,
   type DownloadItem, type DownloadQueueItem, type HistoryItem,
 } from '../utils/api'
-import { clswin, istri, opnapllgn, prbapllgn } from '../utils/tauri'
+import { clswin, istri, opnapllgn, opnurl, prbapllgn } from '../utils/tauri'
 import {
   gtarturl,
   nrmlcdclbl,
@@ -271,15 +271,9 @@ export function useStor() {
 
   const opnext = useCallback((url: string, label?: string) => {
     const targetLabel = label || url
-    try {
-      const newWindow = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!newWindow) {
-        throw new Error('popup_blocked')
-      }
-      pshtst('已打开链接', `正在打开：${targetLabel}`, 'success')
-    } catch {
-      pshtst('打开失败', `无法打开链接：${targetLabel}`, 'error')
-    }
+    void opnurl(url)
+      .then(() => pshtst('已打开链接', `正在打开：${targetLabel}`, 'success'))
+      .catch(() => pshtst('打开失败', `无法打开链接：${targetLabel}`, 'error'))
   }, [pshtst])
 
   const initCookieConfigured = Boolean(healthStatus?.cookies_ok)

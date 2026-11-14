@@ -1,5 +1,5 @@
 // Tauri原生窗口与独立登录WebView管理器
-import { ldtrwin, ldtrwbvw, ldtrcore } from '../head'
+import { ldtrwin, ldtrwbvw, ldtrcore, ldopn } from '../head'
 export interface AppleMusicLoginWindowSession {
   label: string
   close: () => Promise<void>
@@ -22,6 +22,18 @@ export interface OpenAppleMusicLoginOptions {
 }
 
 const APPLE_MUSIC_LOGIN_URL = 'https://music.apple.com/cn/new'
+
+
+// 使用系统默认浏览器打开外部链接
+export async function opnurl(url: string): Promise<void> {
+  if (istri()) {
+    const { openUrl } = await ldopn()
+    await openUrl(url)
+    return
+  }
+  const newWindow = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!newWindow) throw new Error('popup_blocked')
+}
 
 
 // 判断当前运行环境是否为Tauri原生应用
