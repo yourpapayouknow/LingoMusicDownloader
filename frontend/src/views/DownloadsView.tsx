@@ -1,7 +1,7 @@
 // DownloadsView组件
 import { Bdg, Btn, Crd, IcBtn, Spn } from '../ui/components'
 import { Bx, HStk, Hdg, Icn, Img, Txt, VStk } from '../ui/primitives'
-import { dlthstry, gthstry, gtlclart, opncnvtfldr, opnfldr } from '../utils/api'
+import { gtlclart, opncnvtfldr, opnfldr } from '../utils/api'
 import { gterrmsg, nrmlcdclbl } from '../utils/format'
 import type { AppStore } from '../app/useAppStore'
 import type { QueueItem } from '../app/types'
@@ -9,7 +9,7 @@ import type { QueueItem } from '../app/types'
 // DownloadsView组件渲染入口
 export function DwnVw({ store }: { store: AppStore }) {
   const {
-    addlcpl, dlquim, deletingHistoryGroupId, downloadHistory, downloadQueue, hdladhp, hdladqp, hdlclhg, historyAlbumGroups, isPlaying, openAlbums, openHistoryAlbums, pllcltr, playingTrack, pshtst, scanningLocal, setDownloadHistory, setOpenAlbums, setOpenHistoryAlbums, stlclpl, trglscn,
+    addlcpl, dlhsttrk, dlquim, deletingHistoryGroupId, downloadHistory, downloadQueue, hdladhp, hdladqp, hdlclhg, historyAlbumGroups, isPlaying, openAlbums, openHistoryAlbums, pllcltr, playingTrack, pshtst, rfrhst, scanningLocal, setActiveTab, setOpenAlbums, setOpenHistoryAlbums, stlclpl, trglscn,
   } = store
 
   return (
@@ -50,7 +50,8 @@ export function DwnVw({ store }: { store: AppStore }) {
           <Crd style={{ paddingBlock: '32px' }}>
             <VStk align="center" gap="normal">
               <Icn name="download" size={24} style={{ color: 'var(--text-secondary)' }} />
-              <Txt tone="secondary">下载列表为空，快前往搜索页面搜索吧！</Txt>
+              <Txt tone="secondary">下载列表为空，先去搜索歌曲吧</Txt>
+            <Btn variant="secondary" size="sm" onClick={() => setActiveTab('search')}>去搜索</Btn>
             </VStk>
           </Crd>
         ) : (
@@ -82,7 +83,7 @@ export function DwnVw({ store }: { store: AppStore }) {
                             <Txt tone="secondary" style={{ fontSize: '0.76rem' }}>
                               {isAlbum
                                 ? `专辑曲目: ${item.tracks?.length || 0} 首`
-                                : `曲目ID: ${item.trackId || item.id}`}
+                                : (item.artistName || item.albumName || '本地任务')}
                             </Txt>
                             <Bdg tone={isCompleted ? 'success' : isErr ? 'error' : 'info'}>
                               {item.quality}
@@ -96,7 +97,7 @@ export function DwnVw({ store }: { store: AppStore }) {
                         {isDownloading && (
                           <HStk gap="compact" align="center">
                             <Spn size={16} />
-                            <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>正在下...</Txt>
+                            <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>下载中</Txt>
                           </HStk>
                         )}
 
@@ -219,7 +220,7 @@ export function DwnVw({ store }: { store: AppStore }) {
                                       track.trackId,
                                       {
                                         name: track.name,
-                                        artistName: track.artistName || '未知艺术家',
+                                        artistName: track.artistName || '未知歌手',
                                         artworkUrl: track.cover || item.cover,
                                       },
                                       false
@@ -258,7 +259,7 @@ export function DwnVw({ store }: { store: AppStore }) {
       <VStk gap="compact" style={{ marginTop: '16px' }}>
         <HStk justify="space-between" align="center">
           <Hdg level={3}>历史已下载 ({downloadHistory.length})</Hdg>
-          <Btn variant="ghost" size="sm" onClick={() => gthstry().then(res => setDownloadHistory(res))}>刷新</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => void rfrhst()}>刷新</Btn>
         </HStk>
         {historyAlbumGroups.length === 0 ? (
           <Txt tone="secondary" style={{ fontSize: '0.85rem' }}>暂无历史下载记录</Txt>
@@ -372,13 +373,7 @@ export function DwnVw({ store }: { store: AppStore }) {
                                 <IcBtn
                                   variant="ghost"
                                   size={26}
-                                  onClick={() => {
-                                    if (window.confirm('确定要删除此历史记录吗？将同时尝试删除本地文件。')) {
-                                      dlthstry(track.track_id, true).then(() => {
-                                        gthstry().then(res => setDownloadHistory(res))
-                                      }).catch(console.error)
-                                    }
-                                  }}
+                                  onClick={() => dlhsttrk(track)}
                                   title="删除记录"
                                 >
                                   <Icn name="trash" size={11} style={{ color: 'var(--system-error)' }} />

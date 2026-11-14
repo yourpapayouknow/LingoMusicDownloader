@@ -1,6 +1,6 @@
 // TopBar组件
 import type { CSSProperties } from '../head'
-import { IcBtn, Tgl } from '../ui/components'
+import { Bdg, IcBtn, Tgl } from '../ui/components'
 import { HStk, Icn, Img, Txt, VStk } from '../ui/primitives'
 import { fmttm, gtarturl } from '../utils/format'
 import { clswin, istri, maxwin, minwin } from '../utils/tauri'
@@ -10,7 +10,7 @@ import type { AppStore } from '../app/useAppStore'
 // TopBar组件渲染入口
 export function TpBar({ store }: { store: AppStore }) {
   const {
-    hdlnxt, hdlplps, hdlprv, hdlprgc, hdlvolc, isMuted, isPlaying, isRepeat, isShuffle, lyricsOpen, mode, playbackDuration, playbackTime, playingTrack, playlistEntries, playlistOpen, setIsRepeat, setIsShuffle, setLyricsOpen, setPlaylistOpen, tglmod, tglmut, volume,
+    hdlnxt, hdlplps, hdlprv, hdlprgc, hdlvolc, isMuted, isPlaying, isRepeat, isShuffle, lyricsOpen, mode, playbackDuration, playbackTime, playingTrack, playlistEntries, playlistOpen, searchResults, setIsRepeat, setIsShuffle, setLyricsOpen, setPlaylistOpen, tglmod, tglmut, volume,
   } = store
 
   return (
@@ -35,18 +35,28 @@ export function TpBar({ store }: { store: AppStore }) {
       {/* Center player */}
       <div className="am-player">
         <div className="am-controls">
-          <button className="am-btn" onClick={hdlprv} title="上一首">
+          <button
+            className="am-btn"
+            onClick={hdlprv}
+            title="上一首"
+            disabled={playlistEntries.length === 0 && searchResults.length === 0}
+          >
             <Icn name="prev" size={16} filled />
           </button>
           <button
             className="am-btn"
             onClick={hdlplps}
             style={{ width: '36px', height: '36px' }}
-            title={isPlaying ? '暂停' : '试听预览'}
+            title={isPlaying ? '暂停' : '播放'}
           >
             <Icn name={isPlaying ? 'pause' : 'play'} size={19} filled />
           </button>
-          <button className="am-btn" onClick={hdlnxt} title="下一首">
+          <button
+            className="am-btn"
+            onClick={hdlnxt}
+            title="下一首"
+            disabled={playlistEntries.length === 0 && searchResults.length === 0}
+          >
             <Icn name="next" size={16} filled />
           </button>
         </div>
@@ -63,9 +73,12 @@ export function TpBar({ store }: { store: AppStore }) {
                 <>
                   <span>{playingTrack.attributes.name}</span>
                   <span className="am-info-artist"> — {playingTrack.attributes.artistName}</span>
+                  <Bdg tone={playingTrack.attributes.url.includes('/local-play/') ? 'success' : 'info'}>
+                    {playingTrack.attributes.url.includes('/local-play/') ? '本地' : '预览'}
+                  </Bdg>
                 </>
               ) : (
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.74rem' }}>暂无试听预览内容</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.74rem' }}>暂无播放内容</span>
               )}
             </div>
             <span className="am-time am-time-remaining">

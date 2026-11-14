@@ -12,15 +12,16 @@ export function SetVw({ store }: { store: AppStore }) {
     initCookieConfigured, initWrapperConfigured, setlge, metadataRegion, resolution, setCodec,
     setCookieText, setMetadataRegion, setResolution, setTranscodeAacToAacStandard,
     setTranscodeAacToMp3_320, setTranscodeAacToMp4, setTranscodeAlacToFlac, setTranscodeAlacToMp4,
-    setTranscodeAlacToWav, setUseWrapper, skipWrapperAutostart, terminalLogs, tglacd,
+    setTranscodeAlacToWav, setwrpenb, skipWrapperAutostart, terminalLogs, tglacd,
     transcodeAacToAacStandard, transcodeAacToMp3_320, transcodeAacToMp4, transcodeAlacToFlac,
     transcodeAlacToMp4, transcodeAlacToWav, trgsvck, useWrapper,
+    opnwsld, opnwrpd, wslInstallStatusData, wrapperSetupStatusData,
   } = store
 
   return (
     <VStk gap="normal">
       <SetSec id="status" title="运行状态信息" open={accordionOpen.status} onToggle={tglacd}>
-        <Grd minItemWidth="200px" gap="normal">
+        <Grd minItemWidth="240px" gap="normal">
           <Bx padding="normal">
             <VStk gap={4}>
               <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>授权文件Cookies.txt</Txt>
@@ -58,12 +59,55 @@ export function SetVw({ store }: { store: AppStore }) {
             <VStk gap={4}>
               <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>解析曲库首选地区</Txt>
               <HStk justify="space-between" align="center" style={{ marginTop: '4px' }}>
-                <Txt weight={700}>中国大陆 (CN)</Txt>
-                <Bdg tone="default">默认</Bdg>
+                <Txt weight={700}>
+                  {metadataRegion === 'auto'
+                    ? '跟随账号'
+                    : (METADATA_REGION_PRESETS.find((item) => item.value === metadataRegion)?.label || metadataRegion.toUpperCase())}
+                </Txt>
+                <Bdg tone="default">{metadataRegion === 'auto' ? '默认' : '自定义'}</Bdg>
               </HStk>
             </VStk>
           </Bx>
-        </Grd>
+          </Grd>
+        <HStk
+          justify="space-between"
+          align="center"
+          gap="normal"
+          style={{
+            marginTop: '12px',
+            paddingTop: '12px',
+            borderTop: '1px solid color-mix(in srgb, var(--component-wrapped-bg) 26%, transparent)',
+          }}
+        >
+          <VStk gap={2}>
+            <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>安装任务</Txt>
+            <Txt weight={700} style={{ fontSize: '0.8rem' }}>
+              WSL2: {wslInstallStatusData?.running ? '运行中' : wslInstallStatusData?.completed ? (wslInstallStatusData.success_flag ? '已完成' : '失败') : '空闲'}
+              {' · '}
+              Wrapper: {wrapperSetupStatusData?.awaiting_input ? '等待输入' : wrapperSetupStatusData?.running ? '运行中' : wrapperSetupStatusData?.completed ? (wrapperSetupStatusData.success_flag ? '已完成' : '失败') : '空闲'}
+            </Txt>
+          </VStk>
+          <HStk gap="compact">
+            <Btn variant="secondary" size="sm" onClick={() => void opnwsld()}>
+              安装WSL2
+            </Btn>
+            <Btn variant="secondary" size="sm" onClick={() => void opnwrpd()}>
+              安装Wrapper
+            </Btn>
+            {(wslInstallStatusData?.running || wrapperSetupStatusData?.running || wrapperSetupStatusData?.awaiting_input) && (
+              <Btn
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (wslInstallStatusData?.running) void opnwsld()
+                  else void opnwrpd()
+                }}
+              >
+                查看进度
+              </Btn>
+            )}
+          </HStk>
+        </HStk>
       </SetSec>
 
       <SetSec
@@ -101,7 +145,7 @@ export function SetVw({ store }: { store: AppStore }) {
             <Txt weight={700} style={{ fontSize: '0.94rem' }} title="启用无损/全景声下载">高品音质下载</Txt>
             <Tgl
               checked={useWrapper}
-              onChange={(e) => setUseWrapper(e.target.checked)}
+              onChange={(e) => setwrpenb(e.target.checked)}
               disabled={healthStatus ? !healthStatus.wrapper.all_ok : true}
               title="若Wrapper未就绪，提交下载时将直接报错，不再自动降级"
             />

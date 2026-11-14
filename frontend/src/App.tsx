@@ -7,6 +7,7 @@ import { BtmNav } from './components/BottomNav'
 import { WslDlg } from './components/dialogs/WslDialog'
 import { WrpDlg } from './components/dialogs/WrapperDialog'
 import { DwnDlg } from './components/dialogs/DownloadDialog'
+import { CnfDlg } from './components/CnfDlg'
 import { SrchVw } from './views/SearchView'
 import { DwnVw } from './views/DownloadsView'
 import { SetVw } from './views/SettingsView'
@@ -45,6 +46,7 @@ export default function App() {
       <WslDlg store={store} />
       <WrpDlg store={store} />
       <DwnDlg store={store} />
+      <CnfDlg store={store} />
       <TstVw items={store.toasts} onDismiss={store.rmtst} />
       <BtmNav store={store} />
     </div>

@@ -1,14 +1,23 @@
 // SearchView组件
-import { Bdg, Btn, Crd, Chk, Chp, IcBtn, Spn, TxFld } from '../ui/components'
+import { Bdg, Btn, Crd, Chp, IcBtn, Seg, Spn, TxFld } from '../ui/components'
 import { Bx, Grd, HStk, Hdg, Icn, Img, Txt, VStk } from '../ui/primitives'
 import { gtarturl } from '../utils/format'
 import { gtrslbl } from '../app/helpers'
+import type { SearchFilter } from '../app/types'
 import type { AppStore } from '../app/useAppStore'
+
+const FILTER_OPTIONS = [
+  { label: '全部', value: 'all' },
+  { label: '曲目', value: 'songs' },
+  { label: '专辑', value: 'albums' },
+  { label: '歌手', value: 'artists' },
+  { label: 'MV', value: 'music-videos' },
+]
 
 // SearchView组件渲染入口
 export function SrchVw({ store }: { store: AppStore }) {
   const {
-    filterType, filteredSearchResults, hdlfltc, hdlrcck, isPlaying, opndwcf, pltrkpr, playingTrack, recommendations, searchError, searchKeyword, searchLoading, searchRecommendations, setSearchKeyword, trgsrch,
+    filteredSearchResults, hdlrcck, isPlaying, opndwcf, pltrkpr, playingTrack, recommendations, searchError, searchFilter, searchKeyword, searchLoading, searchPerformed, searchRecommendations, searchResults, setSearchFilter, setSearchKeyword, trgsrch,
   } = store
 
   return (
@@ -19,17 +28,20 @@ export function SrchVw({ store }: { store: AppStore }) {
           <Hdg level={3}>搜索曲库</Hdg>
           <HStk gap="compact" style={{ marginTop: '8px' }}>
             <TxFld
-              id="search-input"
               style={{ flex: 1 }}
               placeholder="输入关键词或曲目分享链接..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && trgsrch()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void trgsrch()
+                }
+              }}
               prefix={<Icn name="search" size={16} />}
             />
             <Btn
-              id="search-btn"
-              onClick={trgsrch}
+              onClick={() => void trgsrch()}
               disabled={searchLoading}
               leadingIcon={searchLoading ? <Spn size={14} /> : <Icn name="search" size={14} />}
             >
@@ -54,30 +66,10 @@ export function SrchVw({ store }: { store: AppStore }) {
         <VStk gap="compact">
           <Hdg level={4}>筛选</Hdg>
           <HStk gap="normal" style={{ flexWrap: 'wrap', marginTop: '4px' }}>
-            <Chk
-              label="全部"
-              checked={filterType.all}
-              onChange={(e) => hdlfltc('all', e.target.checked)}
-            />
-            <Chk
-              label="曲目"
-              checked={filterType.song}
-              onChange={(e) => hdlfltc('song', e.target.checked)}
-            />
-            <Chk
-              label="专辑"
-              checked={filterType.album}
-              onChange={(e) => hdlfltc('album', e.target.checked)}
-            />
-            <Chk
-              label="歌手"
-              checked={filterType.artist}
-              onChange={(e) => hdlfltc('artist', e.target.checked)}
-            />
-            <Chk
-              label="MV"
-              checked={filterType.mv}
-              onChange={(e) => hdlfltc('mv', e.target.checked)}
+            <Seg
+              options={FILTER_OPTIONS}
+              value={searchFilter}
+              onChange={(val) => setSearchFilter(val as SearchFilter)}
             />
           </HStk>
         </VStk>
@@ -91,6 +83,23 @@ export function SrchVw({ store }: { store: AppStore }) {
             <Txt tone="error" style={{ fontSize: '0.9rem' }}>{searchError}</Txt>
           </HStk>
         </Bx>
+      )}
+
+      {/* 搜索无结果空状态 */}
+      {searchPerformed && !searchLoading && filteredSearchResults.length === 0 && !searchError && (
+        <Crd>
+          <VStk align="center" gap="normal" style={{ paddingBlock: '24px' }}>
+            <Icn name="search" size={24} style={{ color: 'var(--text-secondary)' }} />
+            <Txt tone="secondary">
+              {searchResults.length > 0 ? '当前筛选下没有结果' : '未找到相关内容，试试其他关键词'}
+            </Txt>
+            {searchResults.length > 0 && (
+              <Btn variant="secondary" size="sm" onClick={() => setSearchFilter('all')}>
+                查看全部
+              </Btn>
+            )}
+          </VStk>
+        </Crd>
       )}
 
       {/* Search Results Block */}

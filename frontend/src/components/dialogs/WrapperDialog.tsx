@@ -1,4 +1,5 @@
 // WrapperDialog组件
+import { useEffect, useRef } from '../../head'
 import { INIT_AGREEMENT_PARAGRAPHS, SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART } from '../../app/constants'
 import { Bdg, Btn, IcBtn, Spn, TxFld } from '../../ui/components'
 import { Bx, HStk, Hdg, Icn, Txt, VStk } from '../../ui/primitives'
@@ -11,12 +12,31 @@ export function WrpDlg({ store }: { store: AppStore }) {
     dsmsgd, hdlclwd, hdlcfws, hdlsgn, hdlckl, hdlent, hdlrsws, hdlswrp, initAgreementReachedEnd, setisc, initCookieConfigured, initCookieLoggingIn, initEnterConfirmOpen, initGuideOpen, initGuideStep, initWrapperConfigured, opnwrpd, opnwsld, pshtst, setInitEnterConfirmOpen, setInitGuideStep, setSkipWrapperAutostart, setWrapperInput2fa, setWrapperInputAppleId, setWrapperInputPassword, wrapperInput2fa, wrapperInputAppleId, wrapperInputDialogOpen, wrapperInputPassword, wrapperInputSubmitting, wrapperSetupDialogOpen, wrapperSetupLoading, wrapperSetupPrecheck, wrapperSetupStatusData,
   } = store
 
+  const wrpRef = useRef<HTMLDivElement>(null)
+  const initRef = useRef<HTMLDivElement>(null)
+
+  // Wrapper弹窗打开时聚焦并支持Esc后台关闭
+  useEffect(() => {
+    if (!wrapperSetupDialogOpen) return
+    wrpRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hdlclwd()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wrapperSetupDialogOpen, hdlclwd])
+
+  // 初始化向导打开时聚焦
+  useEffect(() => {
+    if (initGuideOpen) initRef.current?.focus()
+  }, [initGuideOpen])
+
   return (
     <>
       {/* Wrapper installer/login dialog */}
       {wrapperSetupDialogOpen && (
         <div className="wsl-install-mask" role="dialog" aria-modal="true" aria-label="安装Wrapper并登录">
-          <div className="wsl-install-card">
+          <div className="wsl-install-card" ref={wrpRef} tabIndex={-1} style={{ outline: 'none' }}>
             <VStk gap="normal" style={{ height: '100%' }}>
               <HStk justify="space-between" align="flex-start">
                 <VStk gap={4}>
@@ -29,8 +49,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
                   variant="ghost"
                   size={30}
                   onClick={hdlclwd}
-                  disabled={wrapperSetupStatusData?.running}
-                  title={wrapperSetupStatusData?.running ? '任务进行中，暂不可关闭' : '关闭'}
+                  title={wrapperSetupStatusData?.running ? '后台运行' : '关闭'}
                 >
                   <Icn name="close" size={14} />
                 </IcBtn>
@@ -91,12 +110,8 @@ export function WrpDlg({ store }: { store: AppStore }) {
               )}
 
               <HStk justify="space-between" align="center" style={{ marginTop: 'auto' }}>
-                <Btn
-                  variant="secondary"
-                  onClick={hdlclwd}
-                  disabled={wrapperSetupStatusData?.running}
-                >
-                  关闭
+                <Btn variant="secondary" onClick={hdlclwd}>
+                  {wrapperSetupStatusData?.running || wrapperSetupStatusData?.awaiting_input ? '后台运行' : '关闭'}
                 </Btn>
                 <HStk gap="compact" align="center">
                   <Btn
@@ -185,7 +200,7 @@ export function WrpDlg({ store }: { store: AppStore }) {
       {initGuideOpen && (
         <div className="init-guide-overlay" role="dialog" aria-modal="true" aria-label="首次启动引导">
           <div className="init-guide-backdrop" />
-          <div className="init-guide-modal">
+          <div className="init-guide-modal" ref={initRef} tabIndex={-1} style={{ outline: 'none' }}>
             {initGuideStep === 1 ? (
               <VStk gap="normal" style={{ height: '100%' }}>
                 <VStk gap={4}>

@@ -1,6 +1,6 @@
 // DownloadDialog组件
 import { gtrslbl } from '../../app/helpers'
-import { Bdg, Dlg } from '../../ui/components'
+import { Bdg, Btn, Dlg } from '../../ui/components'
 import { Bx, HStk, Img, Txt, VStk } from '../../ui/primitives'
 import { gtarturl } from '../../utils/format'
 import type { AppStore } from '../../app/useAppStore'
@@ -8,10 +8,15 @@ import type { AppStore } from '../../app/useAppStore'
 // DownloadDialog组件渲染入口
 export function DwnDlg({ store }: { store: AppStore }) {
   const {
-    codec, downloadConfirmOpen, downloadConfirmTrack, hdlcfdw, resolution, setDownloadConfirmOpen, useWrapper,
+    codec, downloadConfirmOpen, downloadConfirmTrack, hdlcfdw, healthStatus, resolution,
+    setActiveTab, setDownloadConfirmOpen, useWrapper,
   } = store
 
   if (!downloadConfirmTrack) return null
+
+  const wrapperBlocked = useWrapper && !healthStatus?.wrapper.all_ok
+  const codecBlocked = !useWrapper && (codec === 'alac' || codec === 'atmos')
+  const blocked = wrapperBlocked || codecBlocked
 
   return (
     <Dlg
@@ -20,6 +25,7 @@ export function DwnDlg({ store }: { store: AppStore }) {
         description=""
         confirmText="确认下载"
         cancelText="取消"
+        confirmDisabled={blocked}
         onOpenChange={(next) => setDownloadConfirmOpen(next)}
         onConfirm={hdlcfdw}
       >
@@ -39,7 +45,7 @@ export function DwnDlg({ store }: { store: AppStore }) {
                 <Txt tone="secondary" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {downloadConfirmTrack.type === 'artists'
                     ? '艺术家'
-                    : (downloadConfirmTrack.attributes.artistName || '未知艺人')}
+                    : (downloadConfirmTrack.attributes.artistName || '未知歌手')}
                 </Txt>
               </VStk>
               <Bdg tone={downloadConfirmTrack.type === 'music-videos' ? 'info' : downloadConfirmTrack.type === 'artists' ? 'success' : 'default'}>
@@ -60,6 +66,24 @@ export function DwnDlg({ store }: { store: AppStore }) {
               }
             </Bdg>
           </HStk>
+
+          {blocked && (
+            <HStk justify="space-between" align="center" gap="compact">
+              <Txt tone="error" style={{ fontSize: '0.8rem' }}>
+                {wrapperBlocked ? 'Wrapper未就绪，请先在设置中启动' : '当前音质需要Wrapper，请先启用高品音质下载'}
+              </Txt>
+              <Btn
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setDownloadConfirmOpen(false)
+                  setActiveTab('settings')
+                }}
+              >
+                去设置
+              </Btn>
+            </HStk>
+          )}
         </VStk>
       </Dlg>
   )

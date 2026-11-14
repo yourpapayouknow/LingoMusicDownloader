@@ -5,6 +5,7 @@ import {
   useId,
   type CSSProperties,
   type ReactNode,
+  type HTMLAttributes,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
@@ -12,7 +13,7 @@ import {
 } from '../head'
 import { Bx, HStk, Icn, Txt, VStk, cx } from './primitives'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost'
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 // 基础操作按钮组件
@@ -188,7 +189,7 @@ export function Seg({
   className?: string
 }) {
   return (
-    <div className={cx('ui-segmented', className)} role="tablist" aria-label="Seg control">
+    <div className={cx('ui-segmented', className)} role="tablist" aria-label="选项">
       {options.map((option) => {
         const active = option.value === value
         return (
@@ -209,7 +210,7 @@ export function Seg({
 }
 
 export function Spn({ size = 22, className }: { size?: number; className?: string }) {
-  return <span className={cx('ui-spinner', className)} style={{ width: size, height: size }} aria-label="Loading" />
+  return <span className={cx('ui-spinner', className)} style={{ width: size, height: size }} aria-label="加载中" />
 }
 
 export function Bdg({
@@ -247,7 +248,7 @@ export function TstVw({
           <VStk gap={6}>
             <HStk justify="space-between" align="center" gap={8}>
               <Txt weight={700}>{item.title}</Txt>
-              <IcBtn aria-label="Dismiss" onClick={() => onDismiss(item.id)}>
+              <IcBtn aria-label="关闭" onClick={() => onDismiss(item.id)}>
                 <Icn name="close" size={14} />
               </IcBtn>
             </HStk>
@@ -263,8 +264,10 @@ export function Dlg({
   open,
   title,
   description,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText = '确认',
+  cancelText = '取消',
+  confirmVariant = 'primary',
+  confirmDisabled = false,
   onOpenChange,
   onConfirm,
   children,
@@ -274,6 +277,8 @@ export function Dlg({
   description?: string
   confirmText?: string
   cancelText?: string
+  confirmVariant?: ButtonVariant
+  confirmDisabled?: boolean
   onOpenChange: (nextOpen: boolean) => void
   onConfirm?: () => void
   children?: ReactNode
@@ -327,6 +332,8 @@ export function Dlg({
             {cancelText}
           </Btn>
           <Btn
+            variant={confirmVariant}
+            disabled={confirmDisabled}
             onClick={() => {
               onConfirm?.()
               onOpenChange(false)
@@ -361,7 +368,7 @@ export function BtmBar({
   } as CSSProperties
 
   return (
-    <nav className="ui-bottombar" aria-label="Primary navigation" style={style}>
+    <nav className="ui-bottombar" aria-label="主导航" style={style}>
       <span className="ui-bottombar-indicator" aria-hidden="true" />
       {items.map((item) => {
         const selected = active === item.value
@@ -384,7 +391,7 @@ export function BtmBar({
   )
 }
 
-export function Crd({ children, className, ...props }: { children?: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
+export function Crd({ children, className, ...props }: { children?: ReactNode; className?: string } & HTMLAttributes<HTMLDivElement>) {
   return (
     <Bx className={cx('ui-card', className)} surface blurPanel radius="container" padding="normal" border {...props}>
       {children}

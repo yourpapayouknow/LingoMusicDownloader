@@ -30,7 +30,7 @@ export function AbtVw({ store }: { store: AppStore }) {
               size="sm"
               onClick={() => opnext(`${repositoryUrl}/releases`, 'GitHub Releases')}
             >
-              检查更新
+              查看更新
             </Btn>
             <Bdg tone="default">后端监听: 8000</Bdg>
             <Bdg tone="default">解密端口: 10020</Bdg>
@@ -68,7 +68,7 @@ export function AbtVw({ store }: { store: AppStore }) {
               { name: 'FastAPI Backend', desc: '极速异步 Python API 框架', url: 'https://github.com/tiangolo/fastapi' },
               { name: 'gamdl Downloader', desc: '核心曲目调度抓取模块', url: 'https://github.com/glomatico/gamdl' }
             ].map((lib, i) => (
-              <Bx key={i} surface border padding="compact" radius="container">
+              <Bx key={i} padding="compact">
                 <HStk justify="space-between" align="center">
                   <VStk gap={2} style={{ minWidth: 0 }}>
                     <Txt weight={600} style={{ fontSize: '0.84rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

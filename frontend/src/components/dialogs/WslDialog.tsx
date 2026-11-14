@@ -1,4 +1,5 @@
 // WslDialog组件
+import { useEffect, useRef } from '../../head'
 import { Bdg, Btn, IcBtn, Spn } from '../../ui/components'
 import { Bx, HStk, Hdg, Icn, Txt, VStk } from '../../ui/primitives'
 import type { AppStore } from '../../app/useAppStore'
@@ -9,11 +10,24 @@ export function WslDlg({ store }: { store: AppStore }) {
     hdlclws, hdlcfw2, wslInstallDialogOpen, wslInstallLoading, wslInstallPrecheck, wslInstallStatusData,
   } = store
 
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  // 弹窗打开时聚焦并支持Esc后台关闭
+  useEffect(() => {
+    if (!wslInstallDialogOpen) return
+    cardRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hdlclws()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wslInstallDialogOpen, hdlclws])
+
   if (!wslInstallDialogOpen) return null
 
   return (
       <div className="wsl-install-mask" role="dialog" aria-modal="true" aria-label="安装WSL2">
-        <div className="wsl-install-card">
+        <div className="wsl-install-card" ref={cardRef} tabIndex={-1}>
           <VStk gap="normal" style={{ height: '100%' }}>
             <HStk justify="space-between" align="flex-start">
               <VStk gap={4}>
@@ -26,8 +40,7 @@ export function WslDlg({ store }: { store: AppStore }) {
                 variant="ghost"
                 size={30}
                 onClick={hdlclws}
-                disabled={wslInstallStatusData?.running}
-                title={wslInstallStatusData?.running ? '安装进行中，暂不可关闭' : '关闭'}
+                title={wslInstallStatusData?.running ? '后台运行' : '关闭'}
               >
                 <Icn name="close" size={14} />
               </IcBtn>
@@ -88,12 +101,8 @@ export function WslDlg({ store }: { store: AppStore }) {
             )}
 
             <HStk justify="space-between" align="center" style={{ marginTop: 'auto' }}>
-              <Btn
-                variant="secondary"
-                onClick={hdlclws}
-                disabled={wslInstallStatusData?.running}
-              >
-                关闭
+              <Btn variant="secondary" onClick={hdlclws}>
+                {wslInstallStatusData?.running ? '后台运行' : '关闭'}
               </Btn>
               <Btn
                 className="init-guide-primary-btn"

@@ -1,5 +1,5 @@
 // 前端应用状态与业务逻辑聚合store
-import { useCallback, useEffect, useMemo, useRef, useState } from '../head'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from '../head'
 import logoImage from '../assets/lingomusiclogo-sm.png'
 import { useThm } from '../theme/ThemeProvider'
 import type { ToastItem, ToastTone } from '../ui/components'
@@ -38,7 +38,7 @@ import {
   SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART,
 } from './constants'
 import { bldsrls } from './helpers'
-import type { QueueItem, PlaylistEntry } from './types'
+import type { QueueItem, PlaylistEntry, SearchFilter, ConfirmPrompt } from './types'
 
 export function useStor() {
   const { mode, tglmod } = useThm()
@@ -55,14 +55,13 @@ export function useStor() {
   // Search Recommendations
   const searchRecommendations = ['周杰伦', '陈奕迅', '林俊杰', '邓紫棋', 'Taylor Swift', '王菲']
 
-  // Search Filter State
-  const [filterType, setFilterType] = useState({
-    all: true,
-    song: false,
-    album: false,
-    artist: false,
-    mv: false
-  })
+  // 搜索结果筛选状态
+  const [searchFilter, setSearchFilter] = useState<SearchFilter>('all')
+  const [searchPerformed, setSearchPerformed] = useState(false)
+  const searchInFlightRef = useRef(false)
+
+  // 应用内确认弹窗状态
+  const [confirmPrompt, setConfirmPrompt] = useState<ConfirmPrompt | null>(null)
 
   // Local & Polled Downloads Queue State
   const [downloadQueue, setDownloadQueue] = useState<QueueItem[]>([])
@@ -217,6 +216,52 @@ export function useStor() {
   const apndlog = useCallback((message: string) => {
     const timeStr = new Date().toLocaleTimeString()
     setTerminalLogs((prev) => [...prev, `[${timeStr}] ${message}`].slice(-25))
+  }, [])
+
+  // 请求应用内确认弹窗
+  const askConfirm = useCallback((prompt: ConfirmPrompt) => setConfirmPrompt(prompt), [])
+
+  // 关闭应用内确认弹窗
+  const closeConfirm = useCallback(() => setConfirmPrompt(null), [])
+
+  // 执行确认动作并关闭弹窗
+  const runConfirm = useCallback(async () => {
+    const prompt = confirmPrompt
+    setConfirmPrompt(null)
+    if (prompt) await prompt.onConfirm()
+  }, [confirmPrompt])
+
+  // 刷新下载历史列表
+  const rfrhst = useCallback(async () => {
+    const rows = await gthstry()
+    setDownloadHistory(rows)
+  }, [])
+
+  // 删除单条下载历史
+  const dlhsttrk = useCallback((track: HistoryItem) => {
+    askConfirm({
+      title: '删除历史记录',
+      description: `确定删除“${track.name}”？将同时尝试删除本地文件。`,
+      confirmText: '删除',
+      tone: 'error',
+      onConfirm: async () => {
+        try {
+          await dlthstry(track.track_id, true)
+          await rfrhst()
+          pshtst('删除完成', `已删除：${track.name}`, 'success')
+        } catch (err) {
+          pshtst('删除失败', gterrmsg(err) || '删除历史记录失败', 'error')
+        }
+      },
+    })
+  }, [askConfirm, rfrhst, pshtst])
+
+  // 切换Wrapper高品音质并回退不兼容编码
+  const setwrpenb = useCallback((enabled: boolean) => {
+    setUseWrapper(enabled)
+    if (!enabled) {
+      setCodec((prev) => (prev === 'alac' || prev === 'atmos' ? 'aac-legacy' : prev))
+    }
   }, [])
 
   const repositoryUrl = 'https://github.com/yourpapayouknow/LingoMusicDownloader'
@@ -579,11 +624,10 @@ export function useStor() {
     }
   }, [wslInstallLoading, wslInstallPrecheck, pshtst, stpwslp, sncwsls])
 
+  // 关闭WSL2安装弹窗（任务在后台继续）
   const hdlclws = useCallback(() => {
-    if (wslInstallStatusData?.running) return
-    stpwslp()
     setWslInstallDialogOpen(false)
-  }, [stpwslp, wslInstallStatusData])
+  }, [])
 
   const stpwrpp = useCallback(() => {
     if (wrapperSetupPollTimerRef.current !== null) {
@@ -708,12 +752,11 @@ export function useStor() {
     await trgwrps(true, false)
   }, [trgwrps])
 
+  // 关闭Wrapper弹窗（任务在后台继续）
   const hdlclwd = useCallback(() => {
-    if (wrapperSetupStatusData?.running) return
-    stpwrpp()
     setWrapperInputDialogOpen(false)
     setWrapperSetupDialogOpen(false)
-  }, [wrapperSetupStatusData, stpwrpp])
+  }, [])
 
   const hdlswrp = useCallback(async () => {
     const inputType = wrapperSetupStatusData?.input_type
@@ -828,7 +871,7 @@ export function useStor() {
       key: `preview:${track.id}`,
       source: 'preview',
       title: track.attributes.name,
-      artistName: track.attributes.artistName || '未知艺术家',
+      artistName: track.attributes.artistName || '未知歌手',
       artworkUrl: track.attributes.artwork?.url || logoImage,
       previewUrl,
       searchTrackId: track.id,
@@ -1199,6 +1242,35 @@ export function useStor() {
     }
   }
 
+  // 全局快捷键：空格播放/暂停，Esc关闭浮动面板
+  const playRef = useRef(hdlplps)
+  useEffect(() => {
+    playRef.current = hdlplps
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+        return
+      }
+      if (e.code === 'Space') {
+        e.preventDefault()
+        playRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (lyricsOpen) setLyricsOpen(false)
+      else if (playlistOpen) setPlaylistOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lyricsOpen, playlistOpen])
+
   const rsvadpk = (direction: -1 | 1): string | null => {
     if (playlistEntries.length === 0) return null
 
@@ -1253,7 +1325,7 @@ export function useStor() {
     }
   }
 
-  const hdlprgc = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const hdlprgc = (e: ChangeEvent<HTMLInputElement>) => {
     const newTime = Number(e.target.value)
     setPlaybackTime(newTime)
     if (audioRef.current) {
@@ -1261,7 +1333,7 @@ export function useStor() {
     }
   }
 
-  const hdlvolc = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const hdlvolc = (e: ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value)
     setVolume(val)
     if (val > 0) {
@@ -1306,29 +1378,32 @@ export function useStor() {
   }
 
   // Search Action
-  const trgsrch = async () => {
-    if (!searchKeyword.trim()) return
+  const trgsrch = async (keywordOverride?: string) => {
+    const keyword = (keywordOverride ?? searchKeyword).trim()
+    if (!keyword || searchInFlightRef.current) return
+    if (keywordOverride) setSearchKeyword(keyword)
+
+    searchInFlightRef.current = true
     setSearchLoading(true)
     setSearchError('')
+    setSearchPerformed(false)
     try {
-      const response = await srchapl(searchKeyword)
-      rprtsrch(searchKeyword).catch(console.error)
+      const response = await srchapl(keyword)
+      rprtsrch(keyword).catch(console.error)
       let list: SearchResult[] = []
 
       if (response.success && response.results) {
         list = bldsrls(response.results)
       }
       setSearchResults(list)
-      if (list.length === 0) {
-        setSearchError('曲库中未找到相关内容')
-      }
-      
-      apndlog(`[搜索请求] 关键字: "${searchKeyword}"，检索出 ${list.length} 个结果`)
+      setSearchPerformed(true)
+      apndlog(`[搜索请求] 关键字: "${keyword}"，检索出 ${list.length} 个结果`)
     } catch (err) {
       console.error(err)
       setSearchError(gterrmsg(err) || '搜索接口异常，请确认后端服务是否运行')
       pshtst('搜索失败', gterrmsg(err) || '调用代理搜索失败', 'error')
     } finally {
+      searchInFlightRef.current = false
       setSearchLoading(false)
     }
   }
@@ -1349,14 +1424,13 @@ export function useStor() {
     setDownloadConfirmOpen(false)
     setDownloadConfirmTrack(null)
 
-    pshtst('下载已提交', `任务已发送至后台排队：${title}`, 'info')
-
     // Append to log console
     apndlog(`[核心调度] 发送下载任务 -> url: ${trackUrl.slice(0, 45)}...`)
 
     // Submit to backend API
     try {
       await sbmtdwnld(trackUrl, codec, resolution, useWrapper, metadataRegion)
+      pshtst('下载已提交', `任务已发送至后台排队：${title}`, 'success')
       // Trigger instant poll to show the new item
       setTimeout(ftsthlth, 500)
     } catch (err) {
@@ -1372,43 +1446,48 @@ export function useStor() {
     pshtst('清理成功', '已移除下载失败任务', 'info')
   }
 
-  const hdlclhg = useCallback(async (
+  const hdlclhg = useCallback((
     groupId: string,
     groupTitle: string,
     tracks: HistoryItem[]
   ) => {
     if (!tracks.length || deletingHistoryGroupId) return
 
-    const promptText = tracks.length > 1
-      ? `确定要删除专辑“${groupTitle}”及其 ${tracks.length} 首曲目吗？将同时尝试删除本地文件。`
-      : `确定要删除“${groupTitle}”吗？将同时尝试删除本地文件。`
+    const description = tracks.length > 1
+      ? `确定删除专辑“${groupTitle}”及其 ${tracks.length} 首曲目？将同时尝试删除本地文件。`
+      : `确定删除“${groupTitle}”？将同时尝试删除本地文件。`
 
-    if (!window.confirm(promptText)) return
+    askConfirm({
+      title: tracks.length > 1 ? '删除专辑记录' : '删除历史记录',
+      description,
+      confirmText: '删除',
+      tone: 'error',
+      onConfirm: async () => {
+        setDeletingHistoryGroupId(groupId)
+        try {
+          const results = await Promise.allSettled(
+            tracks.map((track) => dlthstry(track.track_id, true))
+          )
+          const successCount = results.filter((item) => item.status === 'fulfilled').length
+          const failedCount = results.length - successCount
 
-    setDeletingHistoryGroupId(groupId)
-    try {
-      const results = await Promise.allSettled(
-        tracks.map((track) => dlthstry(track.track_id, true))
-      )
-      const successCount = results.filter((item) => item.status === 'fulfilled').length
-      const failedCount = results.length - successCount
+          await rfrhst()
+          setOpenHistoryAlbums((prev) => ({ ...prev, [groupId]: false }))
 
-      const refreshed = await gthstry()
-      setDownloadHistory(refreshed)
-      setOpenHistoryAlbums((prev) => ({ ...prev, [groupId]: false }))
-
-      if (failedCount > 0) {
-        pshtst('删除完成', `已删除 ${successCount} 首，失败 ${failedCount} 首`, 'info')
-      } else {
-        pshtst('删除完成', `已删除 ${successCount} 首曲目`, 'success')
-      }
-    } catch (err) {
-      console.error(err)
-      pshtst('删除失败', gterrmsg(err) || '整专删除失败，请稍后重试', 'error')
-    } finally {
-      setDeletingHistoryGroupId((current) => (current === groupId ? null : current))
-    }
-  }, [deletingHistoryGroupId, pshtst])
+          if (failedCount > 0) {
+            pshtst('删除完成', `已删除 ${successCount} 首，失败 ${failedCount} 首`, 'info')
+          } else {
+            pshtst('删除完成', `已删除 ${successCount} 首曲目`, 'success')
+          }
+        } catch (err) {
+          console.error(err)
+          pshtst('删除失败', gterrmsg(err) || '整专删除失败，请稍后重试', 'error')
+        } finally {
+          setDeletingHistoryGroupId((current) => (current === groupId ? null : current))
+        }
+      },
+    })
+  }, [deletingHistoryGroupId, askConfirm, rfrhst, pshtst])
 
   const ldlclrc = useCallback(async (trackId: string) => {
     try {
@@ -1497,7 +1576,7 @@ export function useStor() {
       return
     }
     const trackName = item.trackName || item.title
-    const artistName = item.artistName || '未知艺术家'
+    const artistName = item.artistName || '未知歌手'
     stlclpl(trackId, { name: trackName, artistName, artworkUrl: item.cover }, true)
   }
 
@@ -1575,7 +1654,7 @@ export function useStor() {
     }
 
     const trackName = item.trackName || item.title
-    const artistName = item.artistName || '未知艺术家'
+    const artistName = item.artistName || '未知歌手'
     addlcpl(trackId, { name: trackName, artistName, artworkUrl: item.cover }, false)
     pshtst('已添加', `已加入播放列表：${trackName}`, 'success')
   }, [addlcpl, pshtst])
@@ -1585,7 +1664,7 @@ export function useStor() {
       track.track_id,
       {
         name: track.name,
-        artistName: track.artist_name || '未知艺术家',
+        artistName: track.artist_name || '未知歌手',
         artworkUrl: track.artwork_url || gtlclart(track.track_id),
       },
       false
@@ -1635,23 +1714,13 @@ export function useStor() {
 
   // Search recommendation click helper
   const hdlrcck = (keyword: string) => {
-    setSearchKeyword(keyword)
-    // Run search in next tick after state updates
-    setTimeout(() => {
-      const btn = document.getElementById('search-btn')
-      if (btn) btn.click()
-    }, 50)
+    void trgsrch(keyword)
   }
 
   // Filter result logic
-  const filteredSearchResults = searchResults.filter((item) => {
-    if (filterType.all) return true
-    if (filterType.song && item.type === 'songs') return true
-    if (filterType.album && item.type === 'albums') return true
-    if (filterType.artist && item.type === 'artists') return true
-    if (filterType.mv && item.type === 'music-videos') return true
-    return false
-  })
+  const filteredSearchResults = searchFilter === 'all'
+    ? searchResults
+    : searchResults.filter((item) => item.type === searchFilter)
 
   const historyAlbumGroups: Array<{
     id: string
@@ -1702,22 +1771,7 @@ export function useStor() {
     return Array.from(groups.values())
   }, [downloadHistory])
 
-  // Handle recommendation tag toggle logic
-  const hdlfltc = (key: 'all' | 'song' | 'album' | 'artist' | 'mv', checked: boolean) => {
-    if (key === 'all') {
-      setFilterType({ all: true, song: false, album: false, artist: false, mv: false })
-    } else {
-      setFilterType((prev) => {
-        const next = { ...prev, all: false, [key]: checked }
-        // If all sub-filters are unchecked, default back to all
-        if (!next.song && !next.album && !next.artist && !next.mv) {
-          next.all = true
-        }
-        return next
-      })
-    }
-  }
-
+  
   // Calculate downloading badge count
   const downloadingCount = downloadQueue.filter((d) => d.status === 'downloading').length
 
@@ -1771,7 +1825,6 @@ export function useStor() {
     downloaderInitialized,
     downloadingCount,
     ftsthlth,
-    filterType,
     filteredSearchResults,
     hdladhp,
     hdladqp,
@@ -1782,7 +1835,6 @@ export function useStor() {
     hdlcfws,
     hdlclhg,
     hdlsgn,
-    hdlfltc,
     hdlckl,
     hdlent,
     hdlnxt,
@@ -1861,7 +1913,6 @@ export function useStor() {
     setDownloadHistory,
     setDownloadQueue,
     setDownloaderInitialized,
-    setFilterType,
     setHealthStatus,
     setInitAgreementReachedEnd,
     setInitCookieLoggingIn,
@@ -1959,6 +2010,16 @@ export function useStor() {
     setlyr,
     setisc,
     setlge,
+    askConfirm,
+    closeConfirm,
+    runConfirm,
+    confirmPrompt,
+    searchFilter,
+    setSearchFilter,
+    searchPerformed,
+    dlhsttrk,
+    rfrhst,
+    setwrpenb,
     wslInstallStatusData,
   }
 }

@@ -278,6 +278,18 @@ body {
     var(--action-primary-hover);
 }
 
+.ui-button-danger {
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--system-error) 82%, #ffffff 18%), var(--system-error)),
+    var(--system-error);
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--system-error) 70%, #000000 30%);
+}
+
+.ui-button-danger:hover {
+  background: var(--system-error);
+}
+
 .ui-button-secondary {
   background:
     linear-gradient(150deg, color-mix(in srgb, var(--bg-surface) 68%, #ffffff 32%), color-mix(in srgb, var(--component-wrapped-bg) 16%, var(--bg-surface))),
@@ -1235,6 +1247,17 @@ body {
 
 .am-btn:active {
   transform: scale(0.95);
+}
+
+.am-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.am-btn:disabled:hover {
+  background: transparent;
+  transform: none;
 }
 
 .am-display {

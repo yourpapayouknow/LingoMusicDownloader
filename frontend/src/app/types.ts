@@ -3,6 +3,18 @@
 // 主导航标签
 export type TabKey = 'search' | 'download' | 'settings' | 'about'
 
+// 搜索结果筛选分类
+export type SearchFilter = 'all' | 'songs' | 'albums' | 'artists' | 'music-videos'
+
+// 应用内确认弹窗配置
+export type ConfirmPrompt = {
+  title: string
+  description: string
+  confirmText?: string
+  tone?: 'primary' | 'error'
+  onConfirm: () => void | Promise<void>
+}
+
 // 本地下载队列条目
 export interface QueueItem {
   id: string
