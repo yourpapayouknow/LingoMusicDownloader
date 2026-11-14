@@ -97,33 +97,27 @@ export function AbtVw({ store }: { store: AppStore }) {
       <Crd>
         <VStk gap="compact">
           <Txt weight={700}>开源致谢</Txt>
-          <VStk gap={0}>
-            {LIBS.map((lib, index) => (
-              <VStk
+          <Grd minItemWidth="280px" gap="compact" style={{ marginTop: '4px' }}>
+            {LIBS.map((lib) => (
+              <HStk
                 key={lib.name}
-                gap={2}
-                style={{
-                  paddingBlock: '10px',
-                  borderTop: index > 0
-                    ? '1px solid color-mix(in srgb, var(--component-wrapped-bg) 24%, transparent)'
-                    : undefined,
-                }}
+                align="center"
+                gap="compact"
+                style={{ paddingBlock: '6px' }}
               >
-                <HStk justify="space-between" align="center" gap="compact">
-                  <Txt weight={600} style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>{lib.name}</Txt>
-                  <IcBtn
-                    variant="ghost"
-                    size={28}
-                    onClick={() => opnext(lib.url, lib.name)}
-                    title="查看主页"
-                  >
-                    <Icn name="link" size={13} />
-                  </IcBtn>
-                </HStk>
-                <Txt tone="secondary" style={{ fontSize: '0.76rem' }}>{lib.desc}</Txt>
-              </VStk>
+                <IcBtn
+                  variant="ghost"
+                  size={24}
+                  onClick={() => opnext(lib.url, lib.name)}
+                  title="查看主页"
+                >
+                  <Icn name="link" size={12} />
+                </IcBtn>
+                <Txt weight={600} style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>{lib.name}</Txt>
+                <Txt tone="secondary" style={{ fontSize: '0.74rem', whiteSpace: 'nowrap' }}>{lib.desc}</Txt>
+              </HStk>
             ))}
-          </VStk>
+          </Grd>
         </VStk>
       </Crd>
 
