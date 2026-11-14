@@ -1,7 +1,8 @@
 # ==============================================================
 #  LingoMusicDownloader Legacy - Launcher (Tauri + FastAPI)
-#  Purpose: start the frozen legacy frontend/backend pair safely
+#  用途：安全启动遗留版前端与后端
 # ==============================================================
+#requires -Version 7.0
 
 $ErrorActionPreference = "Stop"
 $host.UI.RawUI.WindowTitle = "LingoMusicDownloader Legacy - Launching"
@@ -15,14 +16,9 @@ $PrimaryProjectDir = if ($ProjectName -like "*_legacy") {
     Join-Path $ParentDir "LingoMusicDownloader"
 }
 
-$LocalVenvPython = Join-Path $ProjectDir "venv\Scripts\python.exe"
 $LocalDotVenvPython = Join-Path $ProjectDir ".venv\Scripts\python.exe"
-$SharedVenvPython = Join-Path $PrimaryProjectDir "venv\Scripts\python.exe"
-$SharedDotVenvPython = Join-Path $PrimaryProjectDir ".venv\Scripts\python.exe"
-$VenvPython = if (Test-Path $LocalDotVenvPython) { $LocalDotVenvPython } elseif (Test-Path $LocalVenvPython) { $LocalVenvPython } else { $null }
-$RequirementsFile = Join-Path $ProjectDir "backend\requirements.txt"
-$PyprojectFile = Join-Path $ProjectDir "pyproject.toml"
-$RequirementsStamp = Join-Path $ProjectDir ".venv\.backend_requirements.sha256"
+$VenvPython = if (Test-Path $LocalDotVenvPython) { $LocalDotVenvPython } else { $null }
+$LockStamp = Join-Path $ProjectDir ".venv\.uv_lock.sha256"
 
 $BackendEntry = Join-Path $ProjectDir "run_backend.py"
 $BackendOut = Join-Path $ProjectDir "backend_live.out"
@@ -81,8 +77,17 @@ function Stop-RepoBackendOnPort([int]$Port) {
     }
 
     $cmd = Get-ProcessCommandLine $processId
-    if ($cmd -like "*run_backend.py*") {
-        Write-Host "  [INFO] Port $Port is occupied by another project backend, stopping it first..." -ForegroundColor DarkYellow
+    $procInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
+    $parentInfo = if ($procInfo) {
+        Get-CimInstance Win32_Process -Filter "ProcessId = $($procInfo.ParentProcessId)" -ErrorAction SilentlyContinue
+    } else {
+        $null
+    }
+    $ownedByRepo = ($cmd -like "*$ProjectDir*") -or
+        ($procInfo.ExecutablePath -like "$ProjectDir*") -or
+        ($parentInfo.ExecutablePath -like "$ProjectDir*")
+    if ($ownedByRepo -and $cmd -like "*run_backend.py*") {
+        Write-Host "  [INFO] Port $Port is occupied by this project's backend, stopping it first..." -ForegroundColor DarkYellow
         Stop-Process -Id $processId -Force -ErrorAction Stop
         Start-Sleep -Milliseconds 800
         return
@@ -190,141 +195,53 @@ function Resolve-UvBinary {
     return $null
 }
 
-function Resolve-BootstrapPython {
-    # 查找可用的Python引导解释器
-    if (Test-Path $SharedDotVenvPython) {
-        return @{
-            Path = $SharedDotVenvPython
-            PrefixArgs = @()
-        }
-    }
-
-    if (Test-Path $SharedVenvPython) {
-        return @{
-            Path = $SharedVenvPython
-            PrefixArgs = @()
-        }
-    }
-
-    $pythonCmd = Get-Command "python" -ErrorAction SilentlyContinue
-    if ($pythonCmd) {
-        return @{
-            Path = $pythonCmd.Source
-            PrefixArgs = @()
-        }
-    }
-
-    $pyCmd = Get-Command "py" -ErrorAction SilentlyContinue
-    if ($pyCmd) {
-        return @{
-            Path = $pyCmd.Source
-            PrefixArgs = @("-3")
-        }
-    }
-
-    return $null
-}
-
 function Ensure-LegacyPythonEnv {
-    # 确保遗留端Python虚拟环境与依赖就绪
+    # 使用uv创建并同步遗留端Python环境（唯一依赖源：pyproject.toml + uv.lock）
     $uvExe = Resolve-UvBinary
-    if ($uvExe) {
-        if (-not (Test-Path $LocalDotVenvPython)) {
-            Write-Host "  [INFO] Creating isolated legacy Python environment with uv..." -ForegroundColor Gray
-            & $uvExe venv (Join-Path $ProjectDir ".venv") --python 3.11
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $LocalDotVenvPython)) {
-                Write-Host "  [ERROR] Failed to create the legacy virtual environment via uv." -ForegroundColor Red
-                Read-Host "`n  Press Enter to exit"
-                exit 1
-            }
-        }
-
-        $syncTarget = if (Test-Path $PyprojectFile) { $PyprojectFile } else { $RequirementsFile }
-        # 以uv.lock为依赖同步基准（uv sync依据pyproject/uv.lock）
-        $syncTarget = Join-Path $ProjectDir "uv.lock"
-        $currentHash = (Get-FileHash -Algorithm SHA256 $syncTarget).Hash
-        $storedHash = if (Test-Path $RequirementsStamp) {
-            (Get-Content $RequirementsStamp -ErrorAction SilentlyContinue | Select-Object -First 1)
-        } else {
-            ""
-        }
-
-        if ($currentHash -ne $storedHash) {
-            Write-Host "  [INFO] Syncing legacy backend dependencies with uv..." -ForegroundColor Gray
-            Push-Location $ProjectDir
-            try {
-                & $uvExe sync
-            } finally {
-                Pop-Location
-            }
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "  [ERROR] Failed to install legacy backend dependencies via uv." -ForegroundColor Red
-                Read-Host "`n  Press Enter to exit"
-                exit 1
-            }
-            Set-Content -Path $RequirementsStamp -Value $currentHash -Encoding ASCII
-            Write-Host "  [OK] Legacy backend dependencies are ready (uv)." -ForegroundColor Green
-        }
-
-        $script:VenvPython = $LocalDotVenvPython
-        $VenvPython = $LocalDotVenvPython
-        return
-    }
-
-    $bootstrap = Resolve-BootstrapPython
-    if ($null -eq $bootstrap) {
-        Write-Host "  [ERROR] Missing Python interpreter for legacy environment bootstrap." -ForegroundColor Red
-        Write-Host "          Checked shared venv plus PATH commands: python / py / uv" -ForegroundColor Yellow
+    if (-not $uvExe) {
+        Write-Host "  [ERROR] uv is required but was not found in PATH." -ForegroundColor Red
+        Write-Host "          Install uv from https://docs.astral.sh/uv/ and retry." -ForegroundColor Yellow
         Read-Host "`n  Press Enter to exit"
         exit 1
     }
 
-    if (-not (Test-Path $RequirementsFile)) {
-        Write-Host "  [ERROR] Missing backend requirements file: $RequirementsFile" -ForegroundColor Red
-        Read-Host "`n  Press Enter to exit"
-        exit 1
-    }
-
-    $targetVenv = if (Test-Path $LocalDotVenvPython) { $LocalDotVenvPython } else { $LocalVenvPython }
-    if (-not (Test-Path $targetVenv)) {
-        Write-Host "  [INFO] Creating isolated legacy Python environment..." -ForegroundColor Gray
-        $createArgs = @($bootstrap.PrefixArgs + @("-m", "venv", (Join-Path $ProjectDir "venv")))
-        & $bootstrap.Path @createArgs
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $LocalVenvPython)) {
-            Write-Host "  [ERROR] Failed to create the legacy virtual environment." -ForegroundColor Red
+    if (-not (Test-Path $LocalDotVenvPython)) {
+        Write-Host "  [INFO] Creating isolated legacy Python environment with uv..." -ForegroundColor Gray
+        & $uvExe venv (Join-Path $ProjectDir ".venv") --python 3.11
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $LocalDotVenvPython)) {
+            Write-Host "  [ERROR] Failed to create the legacy virtual environment via uv." -ForegroundColor Red
             Read-Host "`n  Press Enter to exit"
             exit 1
         }
-        $targetVenv = $LocalVenvPython
     }
 
-    $requirementsHash = (Get-FileHash -Algorithm SHA256 $RequirementsFile).Hash
-    $storedHash = if (Test-Path $RequirementsStamp) {
-        (Get-Content $RequirementsStamp -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $syncTarget = Join-Path $ProjectDir "uv.lock"
+    $currentHash = (Get-FileHash -Algorithm SHA256 $syncTarget).Hash
+    $storedHash = if (Test-Path $LockStamp) {
+        (Get-Content $LockStamp -ErrorAction SilentlyContinue | Select-Object -First 1)
     } else {
         ""
     }
 
-    if ($requirementsHash -ne $storedHash) {
-        Write-Host "  [INFO] Syncing legacy backend dependencies..." -ForegroundColor Gray
-        & $targetVenv -m pip install --upgrade pip
+    if ($currentHash -ne $storedHash) {
+        Write-Host "  [INFO] Syncing legacy backend dependencies with uv..." -ForegroundColor Gray
+        Push-Location $ProjectDir
+        try {
+            & $uvExe sync --locked
+        } finally {
+            Pop-Location
+        }
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "  [ERROR] Failed to upgrade pip in the legacy environment." -ForegroundColor Red
+            Write-Host "  [ERROR] Failed to install legacy backend dependencies via uv." -ForegroundColor Red
             Read-Host "`n  Press Enter to exit"
             exit 1
         }
-        & $targetVenv -m pip install -r $RequirementsFile
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  [ERROR] Failed to install legacy backend dependencies." -ForegroundColor Red
-            Read-Host "`n  Press Enter to exit"
-            exit 1
-        }
-        Set-Content -Path $RequirementsStamp -Value $requirementsHash -Encoding ASCII
-        Write-Host "  [OK] Legacy backend dependencies are ready." -ForegroundColor Green
+        Set-Content -Path $LockStamp -Value $currentHash -Encoding ASCII
+        Write-Host "  [OK] Legacy backend dependencies are ready (uv)." -ForegroundColor Green
     }
 
-    $script:VenvPython = $targetVenv
-    $VenvPython = $targetVenv
+    $script:VenvPython = $LocalDotVenvPython
+    $VenvPython = $LocalDotVenvPython
 }
 
 function Wait-BackendReady {

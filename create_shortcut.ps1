@@ -1,14 +1,19 @@
 # ==============================================================
-#  create_shortcut.ps1 - Creates Desktop shortcut
-#  Target: powershell.exe -> launch.ps1
+#  create_shortcut.ps1 - 创建桌面快捷方式
+#  目标：pwsh.exe -> launch.ps1
 # ==============================================================
+#requires -Version 7.0
 
 $ProjectDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LaunchScript = Join-Path $ProjectDir "launch.ps1"
-$IconPath     = Join-Path $ProjectDir "frontend\assets\icon.ico"
+$IconPath     = Join-Path $ProjectDir "frontend\src-tauri\icons\icon.ico"
 $DesktopPath  = [Environment]::GetFolderPath("Desktop")
 $ShortcutPath = Join-Path $DesktopPath "LingoMusicDownloader.lnk"
-$PowerShellExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$PowerShellExe = (Get-Command "pwsh.exe" -ErrorAction SilentlyContinue).Source
+if (-not $PowerShellExe) {
+    Write-Host "  [ERROR] pwsh.exe was not found in PATH." -ForegroundColor Red
+    exit 1
+}
 
 if (-not (Test-Path $IconPath)) {
     # Fallback: use a generic app icon from shell32
@@ -24,8 +29,7 @@ Write-Host ""
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
 
-# Target: powershell.exe with -File argument pointing to launch.ps1
-# This is the most reliable way to launch a PS1 from a desktop shortcut
+# 目标：pwsh.exe 以 -File 参数启动 launch.ps1
 $Shortcut.TargetPath       = $PowerShellExe
 $Shortcut.Arguments        = "-ExecutionPolicy Bypass -NoProfile -File `"$LaunchScript`""
 $Shortcut.WorkingDirectory = $ProjectDir
