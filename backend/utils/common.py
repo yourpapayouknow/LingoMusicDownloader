@@ -1,5 +1,16 @@
-# 跨层共享的纯文本与文件路径辅助函数
+# 跨层共享的纯文本、路径与搜索常量
 from backend.head import Optional, Path, re, unicodedata
+
+# 搜索分类与缓存常量
+SEARCH_CATEGORY_KEYS = ("songs", "music-videos", "albums", "artists", "playlists")
+FAST_SEARCH_TYPES = "songs,albums,artists,music-videos,playlists"
+FAST_SEARCH_LIMIT = 50
+FAST_SEARCH_TIMEOUT_SECONDS = 12.0
+FAST_SEARCH_DIRECT_TIMEOUT_SECONDS = 8.0
+ITUNES_SEARCH_TIMEOUT_SECONDS = 10.0
+SEARCH_CACHE_TTL_SECONDS = 45.0
+SEARCH_CACHE_STALE_SECONDS = 600.0
+SEARCH_CACHE_MAX_ENTRIES = 60
 
 
 # 规范化音频编码标签
