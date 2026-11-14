@@ -7,8 +7,6 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "LingoMusicDownloader Backend"
     API_V1_STR: str = "/api/v1"
     LOG_LEVEL: str = "INFO"
-    DOWNLOAD_MODE: str = "ytdlp"
-    SONG_CODEC_PRIORITY: str = "aac-legacy"
 
     # 获取基础运行目录
     def bsdir(self) -> str:

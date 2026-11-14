@@ -292,17 +292,15 @@ class LingoAppleMusicSongInterface(AppleMusicSongInterface):
 
         return None
 
-    # 获取音频流信息并解析DRM鉴权参数
-    async def _gtsinfo(
+    # 覆盖gamdl基类方法：获取音频流信息并解析DRM鉴权参数
+    async def _get_stream_info(
         self,
         song_metadata: dict,
         codec: SongCodec,
     ) -> StreamInfoAv | None:
-        """
-        Apple 的 HLS 主播放列表用短 opaque id 作 stable_variant_id，而
-        audioAssetMetadata 的键是 SHA-256 摘要，上游直接下标取值会抛 KeyError，
-        被当成"格式不可用"导致整张专辑失败。这里在取值处改用兜底匹配。
-        """
+        # Apple的HLS主播放列表用短opaque id作stable_variant_id，
+        # 而audioAssetMetadata的键是SHA-256摘要；上游直接下标取值会抛KeyError，
+        # 被当成格式不可用导致整张专辑失败，此处改用兜底匹配。
         if "extendedAssetUrls" not in song_metadata["attributes"]:
             song_metadata = (
                 await self.base.apple_music_api.get_song(
