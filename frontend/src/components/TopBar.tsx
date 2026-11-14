@@ -4,7 +4,7 @@ import { Bdg, IcBtn, Tgl } from '../ui/components'
 import { HStk, Icn, Img, Txt, VStk } from '../ui/primitives'
 import { fmttm, gtarturl } from '../utils/format'
 import { clswin, istri, maxwin, minwin } from '../utils/tauri'
-import logoImage from '../assets/lingomusiclogo-sm.png'
+import logoImage from '../assets/logo.svg'
 import type { AppStore } from '../app/useAppStore'
 
 // TopBar组件渲染入口

@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="1024" height="1024" viewBox="0 0 1254 1254" version="1.1" role="img" aria-labelledby="title description">
+  <title id="title">Music — KoDog palette</title>
+  <desc id="description">Hand-crafted closed Bezier paths, with visually centered double-note mark. Original artwork and colors preserved; mark optically shifted 30 viewBox units left and 5 down. No bitmap or filters.</desc>
+  <g id="background" inkscape:groupmode="layer" inkscape:label="Background · warm off-white">
+    <path id="tile" fill="#F1EBE5" d="M 312,16 H 942          C 1106,16 1238,148 1238,312          V 942 C 1238,1106 1106,1238 942,1238          H 312 C 148,1238 16,1106 16,942          V 312 C 16,148 148,16 312,16 Z"/>
+  </g>
+  <g id="music-mark" inkscape:groupmode="layer" inkscape:label="Music symbol · optical alignment" transform="translate(598 627) scale(1.18) translate(-597 -632)">
+    <path id="orange-accent" inkscape:label="Warm orange accent" fill="#FF925B" d="M 405,479 V 422          C 405,357 456,303 521,303          C 582,303 619,348 616,411          L 516,490 Z"/>
+    <path id="ink-music-note" inkscape:label="Deep ink musical note" fill="#102F40" d="M 405,716 V 477          C 405,435 426,409 467,396          L 855,282          C 905,266 959,304 959,354          V 790          C 959,885 891,951 804,960          C 717,970 648,899 648,809          C 648,724 711,655 804,655          C 825,655 847,659 865,666          V 470 L 485,558 V 838          C 485,917 428,985 357,985          C 287,985 235,931 235,857          C 235,777 302,711 381,713          C 390,713 398,715 405,716 Z"/>
+    <path id="cyan-upper-wave" inkscape:label="Cyan flowing upper beam" fill="#00B5D4" d="M 485,575 V 559          C 485,529 500,515 538,487          C 615,435 670,380 700,328          L 855,282          C 905,266 959,304 959,354          V 395          C 959,428 937,454 894,466          L 506,552          C 491,556 485,565 485,575 Z"/>
+    <path id="cyan-notehead" inkscape:label="Cyan right notehead" fill="#00B5D4" d="M 866,669          C 846,659 827,655 804,655          C 711,655 648,724 648,809          C 648,896 711,962 792,962          C 820,962 845,954 866,941 Z"/>
+  </g>
+</svg>

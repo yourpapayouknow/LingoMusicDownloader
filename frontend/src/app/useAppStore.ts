@@ -1,6 +1,6 @@
 // 前端应用状态与业务逻辑聚合store
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from '../head'
-import logoImage from '../assets/lingomusiclogo-sm.png'
+import logoImage from '../assets/logo.svg'
 import { useThm } from '../theme/ThemeProvider'
 import type { ToastItem, ToastTone } from '../ui/components'
 import {

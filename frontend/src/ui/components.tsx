@@ -268,6 +268,7 @@ export function Dlg({
   cancelText = '取消',
   confirmVariant = 'primary',
   confirmDisabled = false,
+  hideCancel = false,
   onOpenChange,
   onConfirm,
   children,
@@ -279,6 +280,7 @@ export function Dlg({
   cancelText?: string
   confirmVariant?: ButtonVariant
   confirmDisabled?: boolean
+  hideCancel?: boolean
   onOpenChange: (nextOpen: boolean) => void
   onConfirm?: () => void
   children?: ReactNode
@@ -328,9 +330,11 @@ export function Dlg({
         </VStk>
         {children}
         <HStk justify="flex-end" gap="compact">
-          <Btn variant="ghost" onClick={() => onOpenChange(false)}>
-            {cancelText}
-          </Btn>
+          {!hideCancel && (
+            <Btn variant="ghost" onClick={() => onOpenChange(false)}>
+              {cancelText}
+            </Btn>
+          )}
           <Btn
             variant={confirmVariant}
             disabled={confirmDisabled}
