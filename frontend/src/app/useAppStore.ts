@@ -1,7 +1,7 @@
 // 前端应用状态与业务逻辑聚合store
 import { useCallback, useEffect, useMemo, useRef, useState } from '../head'
 import logoImage from '../assets/lingomusiclogo-sm.png'
-import { useTheme } from '../theme/ThemeProvider'
+import { useThm } from '../theme/ThemeProvider'
 import type { ToastItem, ToastTone } from '../ui/components'
 import {
   srchapl, sbmtdwnld, gtstts, gthlth, svcks, fnllgn,
@@ -36,13 +36,12 @@ import {
   SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4,
   SETTINGS_KEY_INIT_GUIDE_DISMISSED,
   SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART,
-  MOCK_LYRICS,
 } from './constants'
 import { bldsrls } from './helpers'
 import type { QueueItem, PlaylistEntry } from './types'
 
-export function useAppStore() {
-  const { mode, toggleMode } = useTheme()
+export function useStor() {
+  const { mode, tglmod } = useThm()
 
   // App Layout Navigation State
   const [activeTab, setActiveTab] = useState<'search' | 'download' | 'settings' | 'about'>('search')
@@ -131,14 +130,14 @@ export function useAppStore() {
   const [terminalLogs, setTerminalLogs] = useState<string[]>([
     '[核心控制] LingoMusic Downloader 引擎启动...',
     '[本地服务] 调度核心已在端口 8000 成功侦听。',
-    '[WSL子系统] 正在检测 WSL 解密容器环境...'
+    '[WSL子系统] 正在检测WSL解密容器环境...'
   ])
   const logsEndRef = useRef<HTMLDivElement | null>(null)
 
   // Global Toast Notifications State
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
-  // Download confirmation Dialog warning
+  // Download confirmation Dlg warning
   const [downloadConfirmOpen, setDownloadConfirmOpen] = useState(false)
   const [downloadConfirmTrack, setDownloadConfirmTrack] = useState<SearchResult | null>(null)
 
@@ -170,22 +169,22 @@ export function useAppStore() {
   const lyricsStageRef = useRef<HTMLDivElement | null>(null)
 
   // 绑定音频元素引用
-  const setAudioEl = useCallback((el: HTMLAudioElement | null) => {
+  const setaud = useCallback((el: HTMLAudioElement | null) => {
     audioRef.current = el
   }, [])
 
   // 绑定歌词容器引用
-  const setLyricsStageEl = useCallback((el: HTMLDivElement | null) => {
+  const setlyr = useCallback((el: HTMLDivElement | null) => {
     lyricsStageRef.current = el
   }, [])
 
   // 绑定协议滚动容器引用
-  const setInitScrollEl = useCallback((el: HTMLDivElement | null) => {
+  const setisc = useCallback((el: HTMLDivElement | null) => {
     initAgreementScrollRef.current = el
   }, [])
 
   // 绑定日志底部引用
-  const setLogsEndEl = useCallback((el: HTMLDivElement | null) => {
+  const setlge = useCallback((el: HTMLDivElement | null) => {
     logsEndRef.current = el
   }, [])
   const [playingTrack, setPlayingTrack] = useState<SearchResult | null>(null)
@@ -202,7 +201,7 @@ export function useAppStore() {
   const [lyricsStageHeight, setLyricsStageHeight] = useState(320)
 
   // Push Toast notification helper
-  const pushToast = useCallback((title: string, description: string, tone: ToastTone = 'info') => {
+  const pshtst = useCallback((title: string, description: string, tone: ToastTone = 'info') => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`
     setToasts((prev) => [...prev, { id, title, description, tone }])
     setTimeout(() => {
@@ -210,29 +209,35 @@ export function useAppStore() {
     }, 4000)
   }, [])
 
-  const removeToast = useCallback((id: string) => {
+  const rmtst = useCallback((id: string) => {
     setToasts((prev) => prev.filter((item) => item.id !== id))
+  }, [])
+
+  // 追加终端日志并保留最近25条
+  const apndlog = useCallback((message: string) => {
+    const timeStr = new Date().toLocaleTimeString()
+    setTerminalLogs((prev) => [...prev, `[${timeStr}] ${message}`].slice(-25))
   }, [])
 
   const repositoryUrl = 'https://github.com/yourpapayouknow/LingoMusicDownloader'
 
-  const openExternalLink = useCallback((url: string, label?: string) => {
+  const opnext = useCallback((url: string, label?: string) => {
     const targetLabel = label || url
     try {
       const newWindow = window.open(url, '_blank', 'noopener,noreferrer')
       if (!newWindow) {
         throw new Error('popup_blocked')
       }
-      pushToast('已打开链接', `正在打开：${targetLabel}`, 'success')
+      pshtst('已打开链接', `正在打开：${targetLabel}`, 'success')
     } catch {
-      pushToast('打开失败', `无法打开链接：${targetLabel}`, 'error')
+      pshtst('打开失败', `无法打开链接：${targetLabel}`, 'error')
     }
-  }, [pushToast])
+  }, [pshtst])
 
   const initCookieConfigured = Boolean(healthStatus?.cookies_ok)
   const initWrapperConfigured = Boolean(healthStatus?.wrapper.all_ok)
 
-  const checkInitAgreementScroll = useCallback(() => {
+  const chkagr = useCallback(() => {
     const element = initAgreementScrollRef.current
     if (!element) return
     const reached = element.scrollTop + element.clientHeight >= element.scrollHeight - 8
@@ -241,7 +246,7 @@ export function useAppStore() {
     }
   }, [])
 
-  const handleDisagreeAndExit = useCallback(() => {
+  const hdlsgn = useCallback(() => {
     if (istri()) {
       clswin()
       return
@@ -249,11 +254,11 @@ export function useAppStore() {
     window.close()
   }, [])
 
-  const handleInitCookieLogin = useCallback(async () => {
+  const hdlckl = useCallback(async () => {
     if (initCookieLoggingIn) {
       const activeSession = loginWindowSessionRef.current
       if (activeSession) {
-        pushToast('正在完成登录', '正在关闭登录窗口并继续校验，请稍候…', 'info')
+        pshtst('正在完成登录', '正在关闭登录窗口并继续校验，请稍候…', 'info')
         try {
           await activeSession.close()
         } catch (e) {
@@ -273,7 +278,7 @@ export function useAppStore() {
     let liveCookieCount = 0
     let observedPreLoginCookies = false
 
-    const stopProbe = () => {
+    const stpprb = () => {
       if (probeTimer !== null) {
         window.clearInterval(probeTimer)
         probeTimer = null
@@ -281,7 +286,7 @@ export function useAppStore() {
     }
 
     // 窗口销毁前优先通过Tauri内存接口抓取最新Cookies
-    const captureLiveCookiesBeforeClose = async (windowLabel: string) => {
+    const cptlvc = async (windowLabel: string) => {
       try {
         const probe = await prbapllgn(windowLabel)
         if (probe.cookiesCount > 0) {
@@ -296,10 +301,10 @@ export function useAppStore() {
       }
     }
 
-    const finalizeAfterWindowClosed = async () => {
+    const fnlafw = async () => {
       if (finalized) return
       finalized = true
-      stopProbe()
+      stpprb()
       loginFinalizeRef.current = null
       loginWindowSessionRef.current = null
 
@@ -313,13 +318,13 @@ export function useAppStore() {
           const saveResult = await svcks(content)
           result = {
             success: Boolean(saveResult.success),
-            message: saveResult.message || 'Cookies 已保存并完成初始化',
+            message: saveResult.message || 'Cookies已保存并完成初始化',
             cookies_count: liveCookieCount || content.split('\n').filter((line) => line.trim() && !line.startsWith('#')).length,
           }
         } else if (observedPreLoginCookies) {
           result = {
             success: false,
-            message: '未检测到完整 Apple Music 登录态（缺少 media-user-token），请先在弹窗内完成账号登录再关闭。',
+            message: '未检测到完整Apple Music登录态（缺少 media-user-token），请先在弹窗内完成账号登录再关闭。',
             cookies_count: 0,
           }
         } else {
@@ -343,24 +348,20 @@ export function useAppStore() {
         }
 
         if (result.success) {
-          pushToast('登录成功', result.message || 'Cookies 导出并初始化成功', 'success')
-          const timeStr = new Date().toLocaleTimeString()
-          setTerminalLogs(prev => [
-            ...prev,
-            `[${timeStr}] [授权系统] 已自动导出并加载 Apple Music Cookies (${result.cookies_count} 条)。`
-          ].slice(-25))
+          pshtst('登录成功', result.message || 'Cookies导出并初始化成功', 'success')
+          apndlog(`[授权系统] 已自动导出并加载Apple Music Cookies (${result.cookies_count} 条)。`)
         } else {
-          pushToast('登录未完成', result.message || '未检测到有效登录态', 'error')
+          pshtst('登录未完成', result.message || '未检测到有效登录态', 'error')
         }
       } catch (err) {
         console.error(err)
-        pushToast('登录校验失败', gterrmsg(err) || '无法导出登录 Cookies', 'error')
+        pshtst('登录校验失败', gterrmsg(err) || '无法导出登录Cookies', 'error')
       } finally {
         setInitCookieLoggingIn(false)
       }
     }
 
-    const probeLoginState = async () => {
+    const prblgst = async () => {
       if (finalized || probeInFlight || !loginWindowSession) return
       probeInFlight = true
       try {
@@ -371,15 +372,15 @@ export function useAppStore() {
         if (probe.loginDetected && probe.cookiesContent?.trim()) {
           liveCookieContent = probe.cookiesContent
           liveCookieCount = probe.cookiesCount || liveCookieCount
-          pushToast('检测到登录', '已识别 Apple 登录态，正在自动关闭窗口并完成校验...', 'success')
+          pshtst('检测到登录', '已识别Apple登录态，正在自动关闭窗口并完成校验...', 'success')
           try {
             await loginWindowSession?.close()
             window.setTimeout(() => {
-              void finalizeAfterWindowClosed()
+              void fnlafw()
             }, 600)
           } catch (e) {
             console.warn('Auto close login window failed, fallback to finalize', e)
-            void finalizeAfterWindowClosed()
+            void fnlafw()
           }
         }
       } catch {
@@ -391,7 +392,7 @@ export function useAppStore() {
 
     if (!istri()) {
       window.open('https://music.apple.com/cn/new', '_blank', 'noopener,noreferrer')
-      pushToast('已打开网页', '请完成登录后手动导出 Cookies（当前为浏览器模式）', 'info')
+      pshtst('已打开网页', '请完成登录后手动导出Cookies（当前为浏览器模式）', 'info')
       return
     }
 
@@ -399,50 +400,50 @@ export function useAppStore() {
     try {
       loginWindowSession = await opnapllgn({
         dataDirectory: 'apple-music-login',
-        onBeforeClose: captureLiveCookiesBeforeClose,
+        onBeforeClose: cptlvc,
         onClosed: () => {
-          void finalizeAfterWindowClosed()
+          void fnlafw()
         },
         onError: (message) => {
           finalized = true
-          stopProbe()
+          stpprb()
           loginFinalizeRef.current = null
           loginWindowSessionRef.current = null
           setInitCookieLoggingIn(false)
-          pushToast('登录窗口异常', message, 'error')
+          pshtst('登录窗口异常', message, 'error')
         },
       })
 
       if (!loginWindowSession) {
         finalized = true
-        stopProbe()
+        stpprb()
         loginFinalizeRef.current = null
         loginWindowSessionRef.current = null
         setInitCookieLoggingIn(false)
-        pushToast('启动失败', '当前运行环境不支持内置登录窗口', 'error')
+        pshtst('启动失败', '当前运行环境不支持内置登录窗口', 'error')
         return
       }
 
       loginWindowSessionRef.current = loginWindowSession
-      loginFinalizeRef.current = finalizeAfterWindowClosed
-      pushToast('请先登录', '登录 Apple Music 后系统会尝试自动完成；若未自动关闭，可点击右上角 X 或“完成登录并继续”。', 'info')
+      loginFinalizeRef.current = fnlafw
+      pshtst('请先登录', '登录Apple Music后系统会尝试自动完成；若未自动关闭，可点击右上角 X 或“完成登录并继续”。', 'info')
       probeTimer = window.setInterval(() => {
-        void probeLoginState()
+        void prblgst()
       }, 1200)
-      void probeLoginState()
+      void prblgst()
     } catch (err) {
       console.error(err)
       finalized = true
-      stopProbe()
+      stpprb()
       loginFinalizeRef.current = null
       loginWindowSessionRef.current = null
       setInitCookieLoggingIn(false)
-      pushToast('启动失败', gterrmsg(err) || '无法打开 Apple Music 登录窗口', 'error')
+      pshtst('启动失败', gterrmsg(err) || '无法打开Apple Music登录窗口', 'error')
     }
-  }, [initCookieLoggingIn, pushToast])
+  }, [apndlog, initCookieLoggingIn, pshtst])
 
   // 关闭初始化引导弹窗并持久化完成状态
-  const dismissInitGuide = useCallback(() => {
+  const dsmsgd = useCallback(() => {
     userManuallyOpenedInitGuideRef.current = false
     localStorage.setItem(SETTINGS_KEY_INIT_GUIDE_DISMISSED, 'true')
     setInitGuideOpen(false)
@@ -452,7 +453,7 @@ export function useAppStore() {
   }, [])
 
   // 确认进入主界面
-  const handleInitEnterSoftware = useCallback(() => {
+  const hdlent = useCallback(() => {
     if (!initWrapperConfigured) {
       setInitEnterConfirmOpen(true)
       return
@@ -460,11 +461,11 @@ export function useAppStore() {
     setSkipWrapperAutostart(false)
     localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
     svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
-    dismissInitGuide()
-  }, [initWrapperConfigured, dismissInitGuide])
+    dsmsgd()
+  }, [initWrapperConfigured, dsmsgd])
 
   // 从设置界面手动打开初始化页面
-  const handleOpenInitGuideFromSettings = useCallback(() => {
+  const hdlopn = useCallback(() => {
     userManuallyOpenedInitGuideRef.current = true
     setInitEnterConfirmOpen(false)
     setInitGuideStep(1)
@@ -478,25 +479,25 @@ export function useAppStore() {
     })
   }, [])
 
-  const stopWslInstallPolling = useCallback(() => {
+  const stpwslp = useCallback(() => {
     if (wslInstallPollTimerRef.current !== null) {
       window.clearInterval(wslInstallPollTimerRef.current)
       wslInstallPollTimerRef.current = null
     }
   }, [])
 
-  const syncWslInstallStatus = useCallback(async () => {
+  const sncwsls = useCallback(async () => {
     const status = await wslstts()
     setWslInstallStatusData(status)
 
     if (status.completed) {
-      stopWslInstallPolling()
+      stpwslp()
       setWslInstallLoading(false)
 
       if (!wslInstallCompletedNotifiedRef.current) {
         wslInstallCompletedNotifiedRef.current = true
         if (status.success_flag) {
-          pushToast('安装完成', status.message || 'WSL2 安装与配置已完成', 'success')
+          pshtst('安装完成', status.message || 'WSL2安装与配置已完成', 'success')
           try {
             const [statusData, health] = await Promise.all([gtstts(), gthlth()])
             setDownloaderInitialized(statusData.is_initialized)
@@ -508,15 +509,15 @@ export function useAppStore() {
             setWslInstallDialogOpen(false)
           }, 800)
         } else {
-          pushToast('安装失败', status.message || 'WSL2 安装流程失败，请查看日志', 'error')
+          pshtst('安装失败', status.message || 'WSL2安装流程失败，请查看日志', 'error')
         }
       }
     }
 
     return status
-  }, [pushToast, stopWslInstallPolling])
+  }, [pshtst, stpwslp])
 
-  const openWslInstallDialog = useCallback(async () => {
+  const opnwsld = useCallback(async () => {
     setWslInstallDialogOpen(true)
     setWslInstallLoading(true)
     wslInstallCompletedNotifiedRef.current = false
@@ -530,23 +531,23 @@ export function useAppStore() {
       setWslInstallStatusData(status)
 
       if (status.running && !status.completed) {
-        stopWslInstallPolling()
+        stpwslp()
         wslInstallPollTimerRef.current = window.setInterval(() => {
-          syncWslInstallStatus().catch(console.error)
+          sncwsls().catch(console.error)
         }, 1200)
       }
     } catch (err) {
       console.error(err)
-      pushToast('检查失败', gterrmsg(err) || '无法获取WSL2安装状态', 'error')
+      pshtst('检查失败', gterrmsg(err) || '无法获取WSL2安装状态', 'error')
     } finally {
       setWslInstallLoading(false)
     }
-  }, [pushToast, stopWslInstallPolling, syncWslInstallStatus])
+  }, [pshtst, stpwslp, sncwsls])
 
-  const handleConfirmInstallWsl2 = useCallback(async () => {
+  const hdlcfw2 = useCallback(async () => {
     if (wslInstallLoading) return
     if (wslInstallPrecheck?.already_installed) {
-      pushToast('无需安装', wslInstallPrecheck.message || '检测到本机已安装WSL2', 'info')
+      pshtst('无需安装', wslInstallPrecheck.message || '检测到本机已安装WSL2', 'info')
       return
     }
     setWslInstallLoading(true)
@@ -555,43 +556,43 @@ export function useAppStore() {
     try {
       const startRes = await wslstrt({ required_gb: 15 })
       if (!startRes.success) {
-        pushToast('无法安装', startRes.message || 'WSL2 安装前检查未通过', 'error')
+        pshtst('无法安装', startRes.message || 'WSL2安装前检查未通过', 'error')
         setWslInstallLoading(false)
         return
       }
 
       if (startRes.status === 'success') {
-        await syncWslInstallStatus()
+        await sncwsls()
         setWslInstallLoading(false)
         return
       }
 
-      await syncWslInstallStatus()
-      stopWslInstallPolling()
+      await sncwsls()
+      stpwslp()
       wslInstallPollTimerRef.current = window.setInterval(() => {
-        syncWslInstallStatus().catch(console.error)
+        sncwsls().catch(console.error)
       }, 1200)
     } catch (err) {
       console.error(err)
-      pushToast('启动失败', gterrmsg(err) || '无法启动 WSL2 安装流程', 'error')
+      pshtst('启动失败', gterrmsg(err) || '无法启动WSL2安装流程', 'error')
       setWslInstallLoading(false)
     }
-  }, [wslInstallLoading, wslInstallPrecheck, pushToast, stopWslInstallPolling, syncWslInstallStatus])
+  }, [wslInstallLoading, wslInstallPrecheck, pshtst, stpwslp, sncwsls])
 
-  const handleCloseWslInstallDialog = useCallback(() => {
+  const hdlclws = useCallback(() => {
     if (wslInstallStatusData?.running) return
-    stopWslInstallPolling()
+    stpwslp()
     setWslInstallDialogOpen(false)
-  }, [stopWslInstallPolling, wslInstallStatusData])
+  }, [stpwslp, wslInstallStatusData])
 
-  const stopWrapperSetupPolling = useCallback(() => {
+  const stpwrpp = useCallback(() => {
     if (wrapperSetupPollTimerRef.current !== null) {
       window.clearInterval(wrapperSetupPollTimerRef.current)
       wrapperSetupPollTimerRef.current = null
     }
   }, [])
 
-  const syncWrapperSetupStatus = useCallback(async () => {
+  const sncwrps = useCallback(async () => {
     const status = await wrprstts()
     setWrapperSetupStatusData(status)
 
@@ -602,7 +603,7 @@ export function useAppStore() {
     }
 
     if (status.completed) {
-      stopWrapperSetupPolling()
+      stpwrpp()
       setWrapperSetupLoading(false)
       setWrapperInputSubmitting(false)
 
@@ -612,7 +613,7 @@ export function useAppStore() {
           setSkipWrapperAutostart(false)
           localStorage.setItem(SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART, 'false')
           svstngs({ [SETTINGS_KEY_SKIP_WRAPPER_AUTOSTART]: 'false' }).catch(console.error)
-          pushToast('Wrapper已就绪', status.message || 'Wrapper正在运行', 'success')
+          pshtst('Wrapper已就绪', status.message || 'Wrapper正在运行', 'success')
           try {
             const [statusData, health] = await Promise.all([gtstts(), gthlth()])
             setDownloaderInitialized(statusData.is_initialized)
@@ -625,15 +626,15 @@ export function useAppStore() {
             setWrapperSetupDialogOpen(false)
           }, 800)
         } else {
-          pushToast('Wrapper流程失败', status.message || '请查看日志并重试', 'error')
+          pshtst('Wrapper流程失败', status.message || '请查看日志并重试', 'error')
         }
       }
     }
 
     return status
-  }, [pushToast, stopWrapperSetupPolling])
+  }, [pshtst, stpwrpp])
 
-  const openWrapperSetupDialog = useCallback(async () => {
+  const opnwrpd = useCallback(async () => {
     setWrapperSetupDialogOpen(true)
     setWrapperSetupLoading(true)
     wrapperSetupCompletedNotifiedRef.current = false
@@ -648,21 +649,21 @@ export function useAppStore() {
       setWrapperInputDialogOpen(Boolean(status.awaiting_input))
 
       if (status.running || status.awaiting_input) {
-        stopWrapperSetupPolling()
+        stpwrpp()
         wrapperSetupPollTimerRef.current = window.setInterval(() => {
-          syncWrapperSetupStatus().catch(console.error)
+          sncwrps().catch(console.error)
         }, 1100)
       }
     } catch (err) {
       console.error(err)
-      pushToast('检查失败', gterrmsg(err) || '无法获取Wrapper状态', 'error')
+      pshtst('检查失败', gterrmsg(err) || '无法获取Wrapper状态', 'error')
     } finally {
       setWrapperSetupLoading(false)
     }
-  }, [pushToast, stopWrapperSetupPolling, syncWrapperSetupStatus])
+  }, [pshtst, stpwrpp, sncwrps])
 
   // 启动Wrapper服务并启动状态轮询监控
-  const triggerWrapperSetup = useCallback(async (forceRestart: boolean = false, isSilent: boolean = false) => {
+  const trgwrps = useCallback(async (forceRestart: boolean = false, isSilent: boolean = false) => {
     if (wrapperSetupLoading) return false
     setWrapperSetupLoading(true)
     wrapperSetupCompletedNotifiedRef.current = false
@@ -671,17 +672,17 @@ export function useAppStore() {
       const startRes = await wrprstrt({ force_restart: forceRestart })
       if (!startRes.success) {
         if (!isSilent) {
-          pushToast(forceRestart ? '无法重启' : '无法启动', startRes.message || 'Wrapper启动前检查未通过', 'error')
+          pshtst(forceRestart ? '无法重启' : '无法启动', startRes.message || 'Wrapper启动前检查未通过', 'error')
         }
         setWrapperSetupLoading(false)
         return false
       }
 
-      await syncWrapperSetupStatus()
+      await sncwrps()
       if (startRes.status !== 'success') {
-        stopWrapperSetupPolling()
+        stpwrpp()
         wrapperSetupPollTimerRef.current = window.setInterval(() => {
-          syncWrapperSetupStatus().catch(console.error)
+          sncwrps().catch(console.error)
         }, 1100)
       } else {
         setWrapperSetupLoading(false)
@@ -690,31 +691,31 @@ export function useAppStore() {
     } catch (err) {
       console.error(err)
       if (!isSilent) {
-        pushToast(forceRestart ? '重启失败' : '启动失败', gterrmsg(err) || '无法启动Wrapper流程', 'error')
+        pshtst(forceRestart ? '重启失败' : '启动失败', gterrmsg(err) || '无法启动Wrapper流程', 'error')
       }
       setWrapperSetupLoading(false)
       return false
     }
-  }, [wrapperSetupLoading, pushToast, stopWrapperSetupPolling, syncWrapperSetupStatus])
+  }, [wrapperSetupLoading, pshtst, stpwrpp, sncwrps])
 
   // 确认启动Wrapper服务
-  const handleConfirmStartWrapperSetup = useCallback(async () => {
-    await triggerWrapperSetup(false, false)
-  }, [triggerWrapperSetup])
+  const hdlcfws = useCallback(async () => {
+    await trgwrps(false, false)
+  }, [trgwrps])
 
   // 确认重启Wrapper服务
-  const handleRestartWrapperSetup = useCallback(async () => {
-    await triggerWrapperSetup(true, false)
-  }, [triggerWrapperSetup])
+  const hdlrsws = useCallback(async () => {
+    await trgwrps(true, false)
+  }, [trgwrps])
 
-  const handleCloseWrapperSetupDialog = useCallback(() => {
+  const hdlclwd = useCallback(() => {
     if (wrapperSetupStatusData?.running) return
-    stopWrapperSetupPolling()
+    stpwrpp()
     setWrapperInputDialogOpen(false)
     setWrapperSetupDialogOpen(false)
-  }, [wrapperSetupStatusData, stopWrapperSetupPolling])
+  }, [wrapperSetupStatusData, stpwrpp])
 
-  const handleSubmitWrapperInput = useCallback(async () => {
+  const hdlswrp = useCallback(async () => {
     const inputType = wrapperSetupStatusData?.input_type
     if (!inputType) return
     if (wrapperInputSubmitting) return
@@ -726,7 +727,7 @@ export function useAppStore() {
         const appleId = wrapperInputAppleId.trim()
         const password = wrapperInputPassword.trim()
         if (!appleId || !password) {
-          pushToast('输入不完整', '请输入Apple ID与密码', 'error')
+          pshtst('输入不完整', '请输入Apple ID与密码', 'error')
           setWrapperInputSubmitting(false)
           return
         }
@@ -737,7 +738,7 @@ export function useAppStore() {
           password,
         })
         if (!res.success) {
-          pushToast('提交失败', res.message || '账号密码提交失败', 'error')
+          pshtst('提交失败', res.message || '账号密码提交失败', 'error')
           setWrapperInputSubmitting(false)
           return
         }
@@ -747,7 +748,7 @@ export function useAppStore() {
       } else {
         const code = wrapperInput2fa.trim()
         if (!code) {
-          pushToast('输入不完整', '请输入2FA验证码', 'error')
+          pshtst('输入不完整', '请输入2FA验证码', 'error')
           setWrapperInputSubmitting(false)
           return
         }
@@ -757,7 +758,7 @@ export function useAppStore() {
           code,
         })
         if (!res.success) {
-          pushToast('提交失败', res.message || '2FA验证码提交失败', 'error')
+          pshtst('提交失败', res.message || '2FA验证码提交失败', 'error')
           setWrapperInputSubmitting(false)
           return
         }
@@ -765,14 +766,14 @@ export function useAppStore() {
         setWrapperInputDialogOpen(false)
       }
 
-      await syncWrapperSetupStatus()
-      stopWrapperSetupPolling()
+      await sncwrps()
+      stpwrpp()
       wrapperSetupPollTimerRef.current = window.setInterval(() => {
-        syncWrapperSetupStatus().catch(console.error)
+        sncwrps().catch(console.error)
       }, 1100)
     } catch (err) {
       console.error(err)
-      pushToast('提交失败', gterrmsg(err) || '无法提交Wrapper输入', 'error')
+      pshtst('提交失败', gterrmsg(err) || '无法提交Wrapper输入', 'error')
     } finally {
       setWrapperInputSubmitting(false)
     }
@@ -782,9 +783,9 @@ export function useAppStore() {
     wrapperInputAppleId,
     wrapperInputPassword,
     wrapperInput2fa,
-    pushToast,
-    syncWrapperSetupStatus,
-    stopWrapperSetupPolling
+    pshtst,
+    sncwrps,
+    stpwrpp
   ])
 
   useEffect(() => {
@@ -793,7 +794,7 @@ export function useAppStore() {
     const element = initAgreementScrollRef.current
     if (!element) return
 
-    const onScroll = () => checkInitAgreementScroll()
+    const onScroll = () => chkagr()
     element.addEventListener('scroll', onScroll)
     const raf = window.requestAnimationFrame(onScroll)
 
@@ -801,7 +802,7 @@ export function useAppStore() {
       element.removeEventListener('scroll', onScroll)
       window.cancelAnimationFrame(raf)
     }
-  }, [initGuideOpen, initGuideStep, checkInitAgreementScroll])
+  }, [initGuideOpen, initGuideStep, chkagr])
 
   useEffect(() => {
     if (!initGuideOpen) return
@@ -815,12 +816,12 @@ export function useAppStore() {
 
   useEffect(() => {
     return () => {
-      stopWslInstallPolling()
-      stopWrapperSetupPolling()
+      stpwslp()
+      stpwrpp()
     }
-  }, [stopWslInstallPolling, stopWrapperSetupPolling])
+  }, [stpwslp, stpwrpp])
 
-  const buildPreviewPlaylistEntry = useCallback((track: SearchResult): PlaylistEntry | null => {
+  const bldprvp = useCallback((track: SearchResult): PlaylistEntry | null => {
     const previewUrl = track.attributes.previews?.[0]?.url as string | undefined
     if (!previewUrl) return null
     return {
@@ -834,7 +835,7 @@ export function useAppStore() {
     }
   }, [])
 
-  const addPlaylistEntry = useCallback((entry: PlaylistEntry, setCurrent: boolean = true) => {
+  const addplen = useCallback((entry: PlaylistEntry, setCurrent: boolean = true) => {
     setPlaylistEntries((prev) => {
       const existingIndex = prev.findIndex((item) => item.key === entry.key)
       if (existingIndex >= 0) {
@@ -849,44 +850,47 @@ export function useAppStore() {
     }
   }, [])
 
-  const addSearchTrackToPlaylist = useCallback((track: SearchResult, setCurrent: boolean = true) => {
-    const entry = buildPreviewPlaylistEntry(track)
+  const addstpl = useCallback((track: SearchResult, setCurrent: boolean = true) => {
+    const entry = bldprvp(track)
     if (!entry) return
-    addPlaylistEntry(entry, setCurrent)
-  }, [buildPreviewPlaylistEntry, addPlaylistEntry])
+    addplen(entry, setCurrent)
+  }, [bldprvp, addplen])
 
-  const addLocalTrackToPlaylist = useCallback((
+  const addlcpl = useCallback((
     trackId: string,
     metadata: { name: string; artistName: string; artworkUrl?: string },
     setCurrent: boolean = true
   ) => {
-    addPlaylistEntry({
+    addplen({
       key: `local:${trackId}`,
       source: 'local',
       title: metadata.name,
-      artistName: metadata.artistName || '未知艺术家',
+      artistName: metadata.artistName || '未知歌手',
       artworkUrl: metadata.artworkUrl || logoImage,
       trackId,
     }, setCurrent)
-  }, [addPlaylistEntry])
+  }, [addplen])
 
-  // Persist Settings to API
+  // 防抖持久化设置到本地缓存与后端
   useEffect(() => {
     if (!settingsLoaded) return
     localStorage.setItem(SETTINGS_KEY_METADATA_REGION, metadataRegion)
-    svstngs({
-      [SETTINGS_KEY_CODEC]: codec,
-      [SETTINGS_KEY_RESOLUTION]: resolution,
-      [SETTINGS_KEY_METADATA_REGION]: metadataRegion,
-      [SETTINGS_KEY_USE_WRAPPER]: useWrapper,
-      [SETTINGS_KEY_VOLUME]: volume,
-      [SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320]: transcodeAacToMp3_320,
-      [SETTINGS_KEY_TRANSCODE_AAC_TO_MP4]: transcodeAacToMp4,
-      [SETTINGS_KEY_TRANSCODE_AAC_TO_AAC_STANDARD]: transcodeAacToAacStandard,
-      [SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC]: transcodeAlacToFlac,
-      [SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV]: transcodeAlacToWav,
-      [SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4]: transcodeAlacToMp4,
-    }).catch(console.error)
+    const timer = window.setTimeout(() => {
+      svstngs({
+        [SETTINGS_KEY_CODEC]: codec,
+        [SETTINGS_KEY_RESOLUTION]: resolution,
+        [SETTINGS_KEY_METADATA_REGION]: metadataRegion,
+        [SETTINGS_KEY_USE_WRAPPER]: useWrapper,
+        [SETTINGS_KEY_VOLUME]: volume,
+        [SETTINGS_KEY_TRANSCODE_AAC_TO_MP3_320]: transcodeAacToMp3_320,
+        [SETTINGS_KEY_TRANSCODE_AAC_TO_MP4]: transcodeAacToMp4,
+        [SETTINGS_KEY_TRANSCODE_AAC_TO_AAC_STANDARD]: transcodeAacToAacStandard,
+        [SETTINGS_KEY_TRANSCODE_ALAC_TO_FLAC]: transcodeAlacToFlac,
+        [SETTINGS_KEY_TRANSCODE_ALAC_TO_WAV]: transcodeAlacToWav,
+        [SETTINGS_KEY_TRANSCODE_ALAC_TO_MP4]: transcodeAlacToMp4,
+      }).catch(console.error)
+    }, 300)
+    return () => window.clearTimeout(timer)
   }, [
     codec,
     resolution,
@@ -902,13 +906,7 @@ export function useAppStore() {
     settingsLoaded
   ])
 
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume
-    }
-  }, [volume, isMuted])
-
-  // Sync volume to audio element
+  // 同步音量到音频元素
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume
@@ -917,7 +915,7 @@ export function useAppStore() {
   }, [isMuted, volume])
 
   // Poll Downloads Status & Backend Health
-  const fetchStatusAndHealth = useCallback(async () => {
+  const ftsthlth = useCallback(async () => {
     try {
       const statusData = await gtstts()
       setDownloaderInitialized(statusData.is_initialized)
@@ -991,7 +989,7 @@ export function useAppStore() {
             displayTitle = artistName ? `${artistName} - ${trackName}` : trackName
           }
 
-          const qualityStr = isAlbumTask ? '专辑' : (isMvTask ? 'mv' : nrmlcdclbl(item.codec))
+          const qualityStr = isAlbumTask ? '专辑' : (isMvTask ? 'MV' : nrmlcdclbl(item.codec))
           const taskId = isAlbumTask
             ? `album:${encodeURIComponent(url)}`
             : String(firstMediaItem?.trackId || url.split('/').pop()?.split('?')[0] || 'Unknown')
@@ -1030,7 +1028,7 @@ export function useAppStore() {
 
   useEffect(() => {
     // Initial fetch
-    fetchStatusAndHealth()
+    ftsthlth()
     
     // Fetch Settings
     gtstngs().then(settings => {
@@ -1094,9 +1092,9 @@ export function useAppStore() {
     }).catch(console.error)
 
     // Poll every 3 seconds
-    const interval = setInterval(fetchStatusAndHealth, 3000)
+    const interval = setInterval(ftsthlth, 3000)
     return () => clearInterval(interval)
-  }, [fetchStatusAndHealth])
+  }, [ftsthlth])
 
   // 监控启动流程并在未跳过时默认自动启动Wrapper服务
   useEffect(() => {
@@ -1106,33 +1104,24 @@ export function useAppStore() {
     if (healthStatus?.wrapper.all_ok) return
 
     wrapperAutostartAttemptedRef.current = true
-    void triggerWrapperSetup(false, false)
-  }, [settingsLoaded, initGuideOpen, skipWrapperAutostart, healthStatus?.wrapper.all_ok, triggerWrapperSetup])
-
-  // Preview lyrics timer animation
-  useEffect(() => {
-    if (!isPlaying || lyricsSource !== 'preview') return
-    const interval = setInterval(() => {
-      setLyricIndex((prev) => (prev + 1) % MOCK_LYRICS.length)
-    }, 4500)
-    return () => clearInterval(interval)
-  }, [isPlaying, lyricsSource])
+    void trgwrps(false, false)
+  }, [settingsLoaded, initGuideOpen, skipWrapperAutostart, healthStatus?.wrapper.all_ok, trgwrps])
 
   useEffect(() => {
     if (!lyricsOpen || !lyricsStageRef.current) return
 
     const element = lyricsStageRef.current
-    const updateHeight = () => {
+    const updhgt = () => {
       setLyricsStageHeight(element.getBoundingClientRect().height || 320)
     }
-    updateHeight()
+    updhgt()
 
     if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateHeight)
-      return () => window.removeEventListener('resize', updateHeight)
+      window.addEventListener('resize', updhgt)
+      return () => window.removeEventListener('resize', updhgt)
     }
 
-    const observer = new ResizeObserver(() => updateHeight())
+    const observer = new ResizeObserver(() => updhgt())
     observer.observe(element)
     return () => observer.disconnect()
   }, [lyricsOpen])
@@ -1154,38 +1143,18 @@ export function useAppStore() {
     }
   }, [terminalLogs])
 
-  // Simulated live terminal output stream
-  useEffect(() => {
-    const possibleLogs = [
-      '轮询后端状态完成，下载队列处于空闲状态。',
-      'WSL 解密端口 10020 侦听正常，准备解密握手数据包...',
-      'WSL 解密端口 20020 (M3U8) 数据路由就绪。',
-      '刷新 Cookies 状态：授权依然有效。',
-      '心跳检测完成，守护进程（FastAPI）响应正常。',
-      '等待用户提交搜索请求或曲库下载链接...',
-      '无损高解析度解密密钥缓存已自动刷新。'
-    ]
-
-    const interval = setInterval(() => {
-      const randomLog = possibleLogs[Math.floor(Math.random() * possibleLogs.length)]
-      const timeStr = new Date().toLocaleTimeString()
-      setTerminalLogs((prev) => [...prev, `[${timeStr}] [控制台流] ${randomLog}`].slice(-25))
-    }, 6000)
-
-    return () => clearInterval(interval)
-  }, [])
-
+  
   // Play Preview Action
-  const playTrackPreview = useCallback((track: SearchResult, options?: { syncPlaylist?: boolean }) => {
+  const pltrkpr = useCallback((track: SearchResult, options?: { syncPlaylist?: boolean }) => {
     const previewUrl = track.attributes.previews?.[0]?.url
     if (!previewUrl) {
-      pushToast('无法播放', '该结果暂无在线预览音轨，点击“下载”可获取完整品质音频', 'error')
+      pshtst('无法播放', '该结果暂无在线预览音轨，点击“下载”可获取完整品质音频', 'error')
       return
     }
 
     const shouldSyncPlaylist = options?.syncPlaylist !== false
     if (shouldSyncPlaylist) {
-      addSearchTrackToPlaylist(track, true)
+      addstpl(track, true)
     }
 
     setPlayingTrack(track)
@@ -1200,18 +1169,18 @@ export function useAppStore() {
         .then(() => setIsPlaying(true))
         .catch((err) => {
           console.error('Audio play failed:', err)
-          pushToast('播放失败', '预览加载错误，请检查网络连接', 'error')
+          pshtst('播放失败', '预览加载错误，请检查网络连接', 'error')
         })
     }
-  }, [pushToast, addSearchTrackToPlaylist])
+  }, [pshtst, addstpl])
 
   // Player controls
-  const handlePlayPause = () => {
+  const hdlplps = () => {
     if (!playingTrack) {
       if (searchResults.length > 0) {
-        playTrackPreview(searchResults[0])
+        pltrkpr(searchResults[0])
       } else {
-        pushToast('提示', '请先在搜索曲库中选择歌曲进行试听', 'info')
+        pshtst('提示', '请先在搜索曲库中选择歌曲进行试听', 'info')
       }
       return
     }
@@ -1230,7 +1199,7 @@ export function useAppStore() {
     }
   }
 
-  const resolveAdjacentPlaylistKey = (direction: -1 | 1): string | null => {
+  const rsvadpk = (direction: -1 | 1): string | null => {
     if (playlistEntries.length === 0) return null
 
     const currentIndex = playlistEntries.findIndex((entry) => entry.key === currentPlaylistKey)
@@ -1252,39 +1221,39 @@ export function useAppStore() {
     return playlistEntries[targetIndex]?.key || null
   }
 
-  const handlePrev = () => {
-    const playlistKey = resolveAdjacentPlaylistKey(-1)
+  const hdlprv = () => {
+    const playlistKey = rsvadpk(-1)
     if (playlistKey) {
-      playPlaylistEntryByKey(playlistKey)
+      plplkey(playlistKey)
       return
     }
 
     if (!playingTrack || searchResults.length === 0) return
     const currentIndex = searchResults.findIndex((t) => t.id === playingTrack.id)
     if (currentIndex > 0) {
-      playTrackPreview(searchResults[currentIndex - 1])
+      pltrkpr(searchResults[currentIndex - 1])
     } else {
-      playTrackPreview(searchResults[searchResults.length - 1])
+      pltrkpr(searchResults[searchResults.length - 1])
     }
   }
 
-  const handleNext = () => {
-    const playlistKey = resolveAdjacentPlaylistKey(1)
+  const hdlnxt = () => {
+    const playlistKey = rsvadpk(1)
     if (playlistKey) {
-      playPlaylistEntryByKey(playlistKey)
+      plplkey(playlistKey)
       return
     }
 
     if (!playingTrack || searchResults.length === 0) return
     const currentIndex = searchResults.findIndex((t) => t.id === playingTrack.id)
     if (currentIndex >= 0 && currentIndex < searchResults.length - 1) {
-      playTrackPreview(searchResults[currentIndex + 1])
+      pltrkpr(searchResults[currentIndex + 1])
     } else {
-      playTrackPreview(searchResults[0])
+      pltrkpr(searchResults[0])
     }
   }
 
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const hdlprgc = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = Number(e.target.value)
     setPlaybackTime(newTime)
     if (audioRef.current) {
@@ -1292,7 +1261,7 @@ export function useAppStore() {
     }
   }
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const hdlvolc = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value)
     setVolume(val)
     if (val > 0) {
@@ -1300,12 +1269,12 @@ export function useAppStore() {
     }
   }
 
-  const toggleMute = () => {
+  const tglmut = () => {
     setIsMuted(!isMuted)
   }
 
   // Audio lifecycle bindings
-  const onAudioTimeUpdate = () => {
+  const onatmu = () => {
     // 限制进度刷新频率，避免播放时每秒触发4次全树重渲染
     const now = Date.now()
     if (now - lastTimeUpdateRef.current < 250) {
@@ -1317,13 +1286,13 @@ export function useAppStore() {
     }
   }
 
-  const onAudioLoadedMetadata = () => {
+  const onatlm = () => {
     if (audioRef.current) {
       setPlaybackDuration(audioRef.current.duration)
     }
   }
 
-  const onAudioEnded = () => {
+  const onated = () => {
     setIsPlaying(false)
     setPlaybackTime(0)
     if (isRepeat) {
@@ -1332,12 +1301,12 @@ export function useAppStore() {
         audioRef.current.play().then(() => setIsPlaying(true))
       }
     } else {
-      handleNext()
+      hdlnxt()
     }
   }
 
   // Search Action
-  const triggerSearch = async () => {
+  const trgsrch = async () => {
     if (!searchKeyword.trim()) return
     setSearchLoading(true)
     setSearchError('')
@@ -1354,25 +1323,24 @@ export function useAppStore() {
         setSearchError('曲库中未找到相关内容')
       }
       
-      const timeStr = new Date().toLocaleTimeString()
-      setTerminalLogs(prev => [...prev, `[${timeStr}] [搜索请求] 关键字: "${searchKeyword}"，检索出 ${list.length} 个结果`].slice(-25))
+      apndlog(`[搜索请求] 关键字: "${searchKeyword}"，检索出 ${list.length} 个结果`)
     } catch (err) {
       console.error(err)
       setSearchError(gterrmsg(err) || '搜索接口异常，请确认后端服务是否运行')
-      pushToast('搜索失败', gterrmsg(err) || '调用代理搜索失败', 'error')
+      pshtst('搜索失败', gterrmsg(err) || '调用代理搜索失败', 'error')
     } finally {
       setSearchLoading(false)
     }
   }
 
-  // Trigger Confirmation Dialog
-  const openDownloadConfirm = (track: SearchResult) => {
+  // Trigger Confirmation Dlg
+  const opndwcf = (track: SearchResult) => {
     setDownloadConfirmTrack(track)
     setDownloadConfirmOpen(true)
   }
 
   // Confirm Download and Submit to backend/local Queue
-  const handleConfirmDownload = async () => {
+  const hdlcfdw = async () => {
     if (!downloadConfirmTrack) return
     const track = downloadConfirmTrack
     const title = track.attributes.name
@@ -1381,32 +1349,30 @@ export function useAppStore() {
     setDownloadConfirmOpen(false)
     setDownloadConfirmTrack(null)
 
-    pushToast('下载已提交', `任务已发送至后台排队：${title}`, 'info')
+    pshtst('下载已提交', `任务已发送至后台排队：${title}`, 'info')
 
     // Append to log console
-    const timeStr = new Date().toLocaleTimeString()
-    setTerminalLogs(prev => [...prev, `[${timeStr}] [核心调度] 发送下载任务 -> url: ${trackUrl.slice(0, 45)}...`].slice(-25))
+    apndlog(`[核心调度] 发送下载任务 -> url: ${trackUrl.slice(0, 45)}...`)
 
     // Submit to backend API
     try {
       await sbmtdwnld(trackUrl, codec, resolution, useWrapper, metadataRegion)
       // Trigger instant poll to show the new item
-      setTimeout(fetchStatusAndHealth, 500)
+      setTimeout(ftsthlth, 500)
     } catch (err) {
       console.error('Backend download submission failed:', err)
-      pushToast('任务提交失败', `无法将 “${title}” 提交至后台：${gterrmsg(err) || err}`, 'error')
-      const errTime = new Date().toLocaleTimeString()
-      setTerminalLogs(prev => [...prev, `[${errTime}] [核心调度] 任务提交异常: ${gterrmsg(err) || '后端连接失败'}`].slice(-25))
+      pshtst('任务提交失败', `无法将 “${title}” 提交至后台：${gterrmsg(err) || err}`, 'error')
+      apndlog(`[核心调度] 任务提交异常: ${gterrmsg(err) || '后端连接失败'}`)
     }
   }
 
   // Delete Error item from local list
-  const deleteQueueItem = (id: string) => {
+  const dlquim = (id: string) => {
     setDownloadQueue((prev) => prev.filter((item) => item.id !== id))
-    pushToast('清理成功', '已移除下载失败任务', 'info')
+    pshtst('清理成功', '已移除下载失败任务', 'info')
   }
 
-  const handleDeleteHistoryGroup = useCallback(async (
+  const hdlclhg = useCallback(async (
     groupId: string,
     groupTitle: string,
     tracks: HistoryItem[]
@@ -1432,19 +1398,19 @@ export function useAppStore() {
       setOpenHistoryAlbums((prev) => ({ ...prev, [groupId]: false }))
 
       if (failedCount > 0) {
-        pushToast('删除完成', `已删除 ${successCount} 首，失败 ${failedCount} 首`, 'info')
+        pshtst('删除完成', `已删除 ${successCount} 首，失败 ${failedCount} 首`, 'info')
       } else {
-        pushToast('删除完成', `已删除 ${successCount} 首曲目`, 'success')
+        pshtst('删除完成', `已删除 ${successCount} 首曲目`, 'success')
       }
     } catch (err) {
       console.error(err)
-      pushToast('删除失败', gterrmsg(err) || '整专删除失败，请稍后重试', 'error')
+      pshtst('删除失败', gterrmsg(err) || '整专删除失败，请稍后重试', 'error')
     } finally {
       setDeletingHistoryGroupId((current) => (current === groupId ? null : current))
     }
-  }, [deletingHistoryGroupId, pushToast])
+  }, [deletingHistoryGroupId, pshtst])
 
-  const loadLocalLyricsForTrack = useCallback(async (trackId: string) => {
+  const ldlclrc = useCallback(async (trackId: string) => {
     try {
       const res = await gtlcllrc(trackId)
       const parsed = prslrc(res.content || '')
@@ -1472,7 +1438,7 @@ export function useAppStore() {
     }
   }, [])
 
-  const startLocalPlayback = useCallback((
+  const stlclpl = useCallback((
     trackId: string,
     metadata: { name: string; artistName: string; artworkUrl?: string },
     notify: boolean = false,
@@ -1497,7 +1463,7 @@ export function useAppStore() {
     }
 
     if (syncPlaylist) {
-      addLocalTrackToPlaylist(trackId, metadata, true)
+      addlcpl(trackId, metadata, true)
     }
 
     setPlayingTrack(fakeTrack)
@@ -1505,7 +1471,7 @@ export function useAppStore() {
     setPlaybackTime(0)
     setPlaybackDuration(0)
     setLyricsSource('none')
-    loadLocalLyricsForTrack(trackId).catch(() => undefined)
+    ldlclrc(trackId).catch(() => undefined)
 
     audioRef.current.pause()
     audioRef.current.src = localUrl
@@ -1514,38 +1480,38 @@ export function useAppStore() {
       .then(() => {
         setIsPlaying(true)
         if (notify) {
-          pushToast('正在播放', `正在播放本地文件：${metadata.artistName} - ${metadata.name}`, 'success')
+          pshtst('正在播放', `正在播放本地文件：${metadata.artistName} - ${metadata.name}`, 'success')
         }
       })
       .catch((err) => {
         console.error('Local audio play failed:', err)
-        pushToast('播放失败', '本地音频加载失败，请确认文件存在且可访问', 'error')
+        pshtst('播放失败', '本地音频加载失败，请确认文件存在且可访问', 'error')
       })
-  }, [pushToast, loadLocalLyricsForTrack, addLocalTrackToPlaylist])
+  }, [pshtst, ldlclrc, addlcpl])
 
   // Play local downloaded audio
-  const playLocalTrack = (item: QueueItem) => {
+  const pllcltr = (item: QueueItem) => {
     const trackId = item.trackId || item.id
     if (!trackId || trackId === 'Unknown') {
-      pushToast('播放失败', '该下载项缺少曲目 ID，暂时无法本地播放', 'error')
+      pshtst('播放失败', '该下载项缺少曲目ID，暂时无法本地播放', 'error')
       return
     }
     const trackName = item.trackName || item.title
     const artistName = item.artistName || '未知艺术家'
-    startLocalPlayback(trackId, { name: trackName, artistName, artworkUrl: item.cover }, true)
+    stlclpl(trackId, { name: trackName, artistName, artworkUrl: item.cover }, true)
   }
 
-  const playPlaylistEntryByKey = useCallback((playlistKey: string) => {
+  const plplkey = useCallback((playlistKey: string) => {
     const entry = playlistEntries.find((item) => item.key === playlistKey)
     if (!entry) return
 
     setCurrentPlaylistKey(entry.key)
     if (entry.source === 'local') {
       if (!entry.trackId) {
-        pushToast('播放失败', '播放列表中的本地曲目缺少 track_id', 'error')
+        pshtst('播放失败', '播放列表中的本地曲目缺少 track_id', 'error')
         return
       }
-      startLocalPlayback(
+      stlclpl(
         entry.trackId,
         { name: entry.title, artistName: entry.artistName, artworkUrl: entry.artworkUrl },
         false,
@@ -1555,7 +1521,7 @@ export function useAppStore() {
     }
 
     if (!entry.previewUrl) {
-      pushToast('播放失败', '播放列表中的试听链接不可用', 'error')
+      pshtst('播放失败', '播放列表中的试听链接不可用', 'error')
       return
     }
 
@@ -1574,10 +1540,10 @@ export function useAppStore() {
         previews: [{ url: entry.previewUrl }]
       }
     }
-    playTrackPreview(previewTrack, { syncPlaylist: false })
-  }, [playlistEntries, pushToast, startLocalPlayback, playTrackPreview])
+    pltrkpr(previewTrack, { syncPlaylist: false })
+  }, [playlistEntries, pshtst, stlclpl, pltrkpr])
 
-  const removePlaylistEntry = useCallback((playlistKey: string) => {
+  const rmplent = useCallback((playlistKey: string) => {
     setPlaylistEntries((prev) => {
       const removeIndex = prev.findIndex((item) => item.key === playlistKey)
       if (removeIndex === -1) return prev
@@ -1595,27 +1561,27 @@ export function useAppStore() {
     })
   }, [currentPlaylistKey])
 
-  const clearPlaylistEntries = useCallback(() => {
+  const clrplen = useCallback(() => {
     setPlaylistEntries([])
     setCurrentPlaylistKey('')
-    pushToast('播放列表', '已清空当前播放列表', 'info')
-  }, [pushToast])
+    pshtst('播放列表', '已清空当前播放列表', 'info')
+  }, [pshtst])
 
-  const handleAddQueueItemToPlaylist = useCallback((item: QueueItem) => {
+  const hdladqp = useCallback((item: QueueItem) => {
     const trackId = item.trackId || item.id
     if (!trackId || trackId === 'Unknown') {
-      pushToast('添加失败', '该本地曲目缺少 track_id，无法加入播放列表', 'error')
+      pshtst('添加失败', '该本地曲目缺少 track_id，无法加入播放列表', 'error')
       return
     }
 
     const trackName = item.trackName || item.title
     const artistName = item.artistName || '未知艺术家'
-    addLocalTrackToPlaylist(trackId, { name: trackName, artistName, artworkUrl: item.cover }, false)
-    pushToast('已添加', `已加入播放列表：${trackName}`, 'success')
-  }, [addLocalTrackToPlaylist, pushToast])
+    addlcpl(trackId, { name: trackName, artistName, artworkUrl: item.cover }, false)
+    pshtst('已添加', `已加入播放列表：${trackName}`, 'success')
+  }, [addlcpl, pshtst])
 
-  const handleAddHistoryTrackToPlaylist = useCallback((track: HistoryItem) => {
-    addLocalTrackToPlaylist(
+  const hdladhp = useCallback((track: HistoryItem) => {
+    addlcpl(
       track.track_id,
       {
         name: track.name,
@@ -1624,52 +1590,51 @@ export function useAppStore() {
       },
       false
     )
-    pushToast('已添加', `已加入播放列表：${track.name}`, 'success')
-  }, [addLocalTrackToPlaylist, pushToast])
+    pshtst('已添加', `已加入播放列表：${track.name}`, 'success')
+  }, [addlcpl, pshtst])
 
   // Save cookies action
-  const triggerSaveCookies = async () => {
+  const trgsvck = async () => {
     if (!cookieText.trim()) return
     setCookieSaving(true)
     try {
       const res = await svcks(cookieText)
       if (res.success) {
-        pushToast('授权成功', 'Cookies 配置更新并重载成功！', 'success')
+        pshtst('授权成功', 'Cookies配置更新并重载成功！', 'success')
         setCookieText('')
-        fetchStatusAndHealth()
+        ftsthlth()
         
-        const timeStr = new Date().toLocaleTimeString()
-        setTerminalLogs(prev => [...prev, `[${timeStr}] [授权系统] Cookies 文件加载成功，重置曲库连接。`].slice(-25))
+        apndlog(`[授权系统] Cookies文件加载成功，重置曲库连接。`)
       } else {
-        pushToast('解析失败', res.message || '格式解析异常，请检查 Cookies txt', 'error')
+        pshtst('解析失败', res.message || '格式解析异常，请检查Cookies txt', 'error')
       }
     } catch (err) {
       console.error(err)
-      pushToast('文件写入失败', gterrmsg(err) || '无法写入 cookies.txt', 'error')
+      pshtst('文件写入失败', gterrmsg(err) || '无法写入 cookies.txt', 'error')
     } finally {
       setCookieSaving(false)
     }
   }
 
   // Scan local download folder and backfill DB history
-  const triggerLocalScan = async () => {
+  const trglscn = async () => {
     if (scanningLocal) return
     setScanningLocal(true)
     try {
       const res = await scnlcl()
       const summary = `扫描 ${res.scanned_files} 首，新增 ${res.inserted}，更新 ${res.updated}，跳过 ${res.skipped}，失败 ${res.failed}`
-      pushToast('扫描完成', summary, res.failed > 0 ? 'info' : 'success')
+      pshtst('扫描完成', summary, res.failed > 0 ? 'info' : 'success')
       gthstry().then((rows) => setDownloadHistory(rows)).catch(console.error)
     } catch (err) {
       console.error(err)
-      pushToast('扫描失败', gterrmsg(err) || '无法扫描本地曲库', 'error')
+      pshtst('扫描失败', gterrmsg(err) || '无法扫描本地曲库', 'error')
     } finally {
       setScanningLocal(false)
     }
   }
 
   // Search recommendation click helper
-  const handleRecommendationClick = (keyword: string) => {
+  const hdlrcck = (keyword: string) => {
     setSearchKeyword(keyword)
     // Run search in next tick after state updates
     setTimeout(() => {
@@ -1707,7 +1672,7 @@ export function useAppStore() {
 
     for (const item of downloadHistory) {
       const albumName = (item.album_name || '').trim()
-      const artistName = (item.artist_name || '未知艺人').trim()
+      const artistName = (item.artist_name || '未知歌手').trim()
       const isAlbumGroup = albumName.length > 0
       const key = isAlbumGroup
         ? `${artistName}::${albumName}`
@@ -1738,7 +1703,7 @@ export function useAppStore() {
   }, [downloadHistory])
 
   // Handle recommendation tag toggle logic
-  const handleFilterChange = (key: 'all' | 'song' | 'album' | 'artist' | 'mv', checked: boolean) => {
+  const hdlfltc = (key: 'all' | 'song' | 'album' | 'artist' | 'mv', checked: boolean) => {
     if (key === 'all') {
       setFilterType({ all: true, song: false, album: false, artist: false, mv: false })
     } else {
@@ -1757,12 +1722,12 @@ export function useAppStore() {
   const downloadingCount = downloadQueue.filter((d) => d.status === 'downloading').length
 
   // Accordion toggle helper
-  const toggleAccordion = (key: string) => {
+  const tglacd = (key: string) => {
     setAccordionOpen(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
   const displayLyricsLines = (() => {
-    if (lyricsSource === 'preview') return MOCK_LYRICS
+    if (lyricsSource === 'preview') return []
     if (lyricsSource === 'local') {
       if (timedLyrics.length > 0) return timedLyrics.map((item) => item.text)
       if (plainLyrics.length > 0) return plainLyrics
@@ -1784,20 +1749,20 @@ export function useAppStore() {
     accordionOpen,
     activeDisplayLyricIndex,
     activeTab,
-    addLocalTrackToPlaylist,
-    addPlaylistEntry,
-    addSearchTrackToPlaylist,
-    buildPreviewPlaylistEntry,
-    checkInitAgreementScroll,
-    clearPlaylistEntries,
+    addlcpl,
+    addplen,
+    addstpl,
+    bldprvp,
+    chkagr,
+    clrplen,
     codec,
     cookieSaving,
     cookieText,
     currentPlaylistKey,
-    deleteQueueItem,
+    dlquim,
     deletingHistoryGroupId,
     disclaimerLang,
-    dismissInitGuide,
+    dsmsgd,
     displayLyricsLines,
     downloadConfirmOpen,
     downloadConfirmTrack,
@@ -1805,30 +1770,30 @@ export function useAppStore() {
     downloadQueue,
     downloaderInitialized,
     downloadingCount,
-    fetchStatusAndHealth,
+    ftsthlth,
     filterType,
     filteredSearchResults,
-    handleAddHistoryTrackToPlaylist,
-    handleAddQueueItemToPlaylist,
-    handleCloseWrapperSetupDialog,
-    handleCloseWslInstallDialog,
-    handleConfirmDownload,
-    handleConfirmInstallWsl2,
-    handleConfirmStartWrapperSetup,
-    handleDeleteHistoryGroup,
-    handleDisagreeAndExit,
-    handleFilterChange,
-    handleInitCookieLogin,
-    handleInitEnterSoftware,
-    handleNext,
-    handleOpenInitGuideFromSettings,
-    handlePlayPause,
-    handlePrev,
-    handleProgressChange,
-    handleRecommendationClick,
-    handleRestartWrapperSetup,
-    handleSubmitWrapperInput,
-    handleVolumeChange,
+    hdladhp,
+    hdladqp,
+    hdlclwd,
+    hdlclws,
+    hdlcfdw,
+    hdlcfw2,
+    hdlcfws,
+    hdlclhg,
+    hdlsgn,
+    hdlfltc,
+    hdlckl,
+    hdlent,
+    hdlnxt,
+    hdlopn,
+    hdlplps,
+    hdlprv,
+    hdlprgc,
+    hdlrcck,
+    hdlrsws,
+    hdlswrp,
+    hdlvolc,
     healthStatus,
     historyAlbumGroups,
     initAgreementReachedEnd,
@@ -1842,7 +1807,7 @@ export function useAppStore() {
     isPlaying,
     isRepeat,
     isShuffle,
-    loadLocalLyricsForTrack,
+    ldlclrc,
     lyricCenterOffset,
     lyricIndex,
     lyricLineHeight,
@@ -1852,31 +1817,31 @@ export function useAppStore() {
     lyricsStageHeight,
     metadataRegion,
     mode,
-    onAudioEnded,
-    onAudioLoadedMetadata,
-    onAudioTimeUpdate,
+    onated,
+    onatlm,
+    onatmu,
     openAlbums,
-    openDownloadConfirm,
-    openExternalLink,
+    opndwcf,
+    opnext,
     openHistoryAlbums,
-    openWrapperSetupDialog,
-    openWslInstallDialog,
+    opnwrpd,
+    opnwsld,
     plainLyrics,
-    playLocalTrack,
-    playPlaylistEntryByKey,
-    playTrackPreview,
+    pllcltr,
+    plplkey,
+    pltrkpr,
     playbackDuration,
     playbackTime,
     playingTrack,
     playlistEntries,
     playlistOpen,
-    pushToast,
+    pshtst,
     recommendations,
-    removePlaylistEntry,
-    removeToast,
+    rmplent,
+    rmtst,
     repositoryUrl,
     resolution,
-    resolveAdjacentPlaylistKey,
+    rsvadpk,
     scanningLocal,
     searchError,
     searchKeyword,
@@ -1955,27 +1920,27 @@ export function useAppStore() {
     setWslInstallStatusData,
     settingsLoaded,
     skipWrapperAutostart,
-    startLocalPlayback,
-    stopWrapperSetupPolling,
-    stopWslInstallPolling,
-    syncWrapperSetupStatus,
-    syncWslInstallStatus,
+    stlclpl,
+    stpwrpp,
+    stpwslp,
+    sncwrps,
+    sncwsls,
     terminalLogs,
     timedLyrics,
     toasts,
-    toggleAccordion,
-    toggleMode,
-    toggleMute,
+    tglacd,
+    tglmod,
+    tglmut,
     transcodeAacToAacStandard,
     transcodeAacToMp3_320,
     transcodeAacToMp4,
     transcodeAlacToFlac,
     transcodeAlacToMp4,
     transcodeAlacToWav,
-    triggerLocalScan,
-    triggerSaveCookies,
-    triggerSearch,
-    triggerWrapperSetup,
+    trglscn,
+    trgsvck,
+    trgsrch,
+    trgwrps,
     useWrapper,
     volume,
     wrapperInput2fa,
@@ -1990,12 +1955,12 @@ export function useAppStore() {
     wslInstallDialogOpen,
     wslInstallLoading,
     wslInstallPrecheck,
-    setAudioEl,
-    setLyricsStageEl,
-    setInitScrollEl,
-    setLogsEndEl,
+    setaud,
+    setlyr,
+    setisc,
+    setlge,
     wslInstallStatusData,
   }
 }
 
-export type AppStore = ReturnType<typeof useAppStore>
+export type AppStore = ReturnType<typeof useStor>

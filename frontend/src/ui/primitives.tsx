@@ -1,7 +1,5 @@
 // 基础UI原子布局组件与设计系统样式容器
 import {
-  useState,
-  forwardRef,
   AddRegular,
   AddFilled,
   AlertRegular,
@@ -126,12 +124,11 @@ type BoxProps<T extends ElementType = 'div'> = {
   padding?: SpaceValue
   radius?: RadiusValue
   surface?: boolean
-  wrapped?: boolean
   blurPanel?: boolean
   border?: boolean
 } & Omit<ComponentPropsWithoutRef<T>, 'as' | 'children' | 'className' | 'style'>
 
-export function Box<T extends ElementType = 'div'>({
+export function Bx<T extends ElementType = 'div'>({
   as,
   children,
   className,
@@ -139,7 +136,6 @@ export function Box<T extends ElementType = 'div'>({
   padding,
   radius,
   surface,
-  wrapped,
   blurPanel,
   border,
   ...props
@@ -156,11 +152,6 @@ export function Box<T extends ElementType = 'div'>({
 
   if (surface) {
     mergedStyle.background = 'var(--bg-surface)'
-  }
-
-  if (wrapped) {
-    mergedStyle.background = 'var(--component-wrapped-bg)'
-    mergedStyle.color = 'var(--component-wrapped-text)'
   }
 
   if (blurPanel) {
@@ -186,7 +177,7 @@ type StackProps = {
   wrap?: boolean
 } & ComponentPropsWithoutRef<'div'>
 
-export function HStack({ children, className, style, gap = 'normal', align, justify, wrap, ...props }: StackProps) {
+export function HStk({ children, className, style, gap = 'normal', align, justify, wrap, ...props }: StackProps) {
   return (
     <div
       className={cx('ui-stack', 'ui-hstack', className)}
@@ -204,7 +195,7 @@ export function HStack({ children, className, style, gap = 'normal', align, just
   )
 }
 
-export function VStack({ children, className, style, gap = 'normal', align, justify, ...props }: StackProps) {
+export function VStk({ children, className, style, gap = 'normal', align, justify, ...props }: StackProps) {
   return (
     <div
       className={cx('ui-stack', 'ui-vstack', className)}
@@ -221,14 +212,6 @@ export function VStack({ children, className, style, gap = 'normal', align, just
   )
 }
 
-export function ZStack({ children, className, style, ...props }: ComponentPropsWithoutRef<'div'>) {
-  return (
-    <div className={cx('ui-zstack', className)} style={style} {...props}>
-      {children}
-    </div>
-  )
-}
-
 type GridProps = {
   children?: ReactNode
   className?: string
@@ -238,7 +221,7 @@ type GridProps = {
   gap?: SpaceValue
 } & ComponentPropsWithoutRef<'div'>
 
-export function Grid({
+export function Grd({
   children,
   className,
   style,
@@ -271,7 +254,7 @@ type ScrollViewProps = {
   height?: string | number
 } & ComponentPropsWithoutRef<'div'>
 
-export function ScrollView({ children, className, style, height, ...props }: ScrollViewProps) {
+export function ScrVw({ children, className, style, height, ...props }: ScrollViewProps) {
   return (
     <div
       className={cx('ui-scrollview', className)}
@@ -286,11 +269,7 @@ export function ScrollView({ children, className, style, height, ...props }: Scr
   )
 }
 
-export function Spacer({ className, style, ...props }: ComponentPropsWithoutRef<'div'>) {
-  return <div className={cx('ui-spacer', className)} style={style} {...props} />
-}
-
-export function Divider({
+export function Dvd({
   className,
   style,
   vertical,
@@ -303,7 +282,7 @@ export function Divider({
   return <hr className={cx('ui-divider', className)} style={style} {...props} />
 }
 
-type Tone = 'primary' | 'secondary' | 'wrapped' | 'action' | 'error'
+type Tone = 'primary' | 'secondary' | 'error'
 
 type TextProps<T extends ElementType = 'span'> = {
   as?: T
@@ -314,7 +293,7 @@ type TextProps<T extends ElementType = 'span'> = {
   children?: ReactNode
 } & Omit<ComponentPropsWithoutRef<T>, 'as' | 'className' | 'style' | 'children'>
 
-export function Text<T extends ElementType = 'span'>({
+export function Txt<T extends ElementType = 'span'>({
   as,
   tone = 'primary',
   weight = 500,
@@ -331,7 +310,7 @@ export function Text<T extends ElementType = 'span'>({
   )
 }
 
-export function Heading({
+export function Hdg({
   level = 2,
   className,
   children,
@@ -348,9 +327,9 @@ export function Heading({
   } as const
   const tag = tagByLevel[safeLevel as 1 | 2 | 3 | 4 | 5 | 6]
   return (
-    <Text as={tag} className={cx('ui-heading', `ui-heading-${safeLevel}`, className)} weight={700} {...props}>
+    <Txt as={tag} className={cx('ui-heading', `ui-heading-${safeLevel}`, className)} weight={700} {...props}>
       {children}
-    </Text>
+    </Txt>
   )
 }
 
@@ -359,7 +338,7 @@ type ImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   fit?: CSSProperties['objectFit']
 }
 
-export function Image({ className, style, radius = 'container', fit = 'cover', ...props }: ImageProps) {
+export function Img({ className, style, radius = 'container', fit = 'cover', ...props }: ImageProps) {
   return (
     <img
       className={cx('ui-image', className)}
@@ -410,7 +389,7 @@ const MGC_ICONS = {
 export type IconName = keyof typeof MGC_ICONS
 
 // 渲染MingCute统一图标组件
-export function Icon({
+export function Icn({
   name,
   className,
   size = 18,
@@ -427,42 +406,3 @@ export function Icon({
   const IconComp = filled ? iconPair.filled : iconPair.regular
   return <IconComp className={cx('ui-icon', className)} size={size} style={style} />
 }
-
-export const Avatar = forwardRef<
-  HTMLDivElement,
-  {
-    src?: string
-    name?: string
-    size?: number
-    className?: string
-    style?: CSSProperties
-  }
->(function Avatar({ src, name = 'User', size = 40, className, style }, ref) {
-  const [imageFailed, setImageFailed] = useState(false)
-  const initials = name
-    .split(' ')
-    .map((part) => part[0] ?? '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-
-  return (
-    <div
-      ref={ref}
-      className={cx('ui-avatar', className)}
-      style={{
-        ...style,
-        width: size,
-        height: size,
-      }}
-      aria-label={name}
-      title={name}
-    >
-      {src && !imageFailed ? (
-        <img src={src} alt={name} onError={() => setImageFailed(true)} />
-      ) : (
-        <span>{initials}</span>
-      )}
-    </div>
-  )
-})

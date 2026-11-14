@@ -1,99 +1,99 @@
 // PlaylistPanel组件
-import { Badge, Button, Card, IconButton } from '../ui/components'
-import { Divider, HStack, Icon, Image, Text, VStack } from '../ui/primitives'
+import { Bdg, Btn, Crd, IcBtn } from '../ui/components'
+import { Dvd, HStk, Icn, Img, Txt, VStk } from '../ui/primitives'
 import { gtarturl } from '../utils/format'
 import type { AppStore } from '../app/useAppStore'
 
 // PlaylistPanel组件渲染入口
-export function PlaylistPanel({ store }: { store: AppStore }) {
+export function PlsPnl({ store }: { store: AppStore }) {
   const {
-    clearPlaylistEntries, currentPlaylistKey, playPlaylistEntryByKey, playlistEntries, playlistOpen, removePlaylistEntry, setPlaylistOpen,
+    clrplen, currentPlaylistKey, plplkey, playlistEntries, playlistOpen, rmplent, setPlaylistOpen,
   } = store
 
   if (!playlistOpen) return null
 
   return (
     <div className="playlist-panel">
-      <HStack justify="space-between" align="center" style={{ marginBottom: '12px' }}>
-        <Text weight={700}>播放列表 ({playlistEntries.length})</Text>
-        <HStack gap="compact" align="center">
-          <Button
+      <HStk justify="space-between" align="center" style={{ marginBottom: '12px' }}>
+        <Txt weight={700}>播放列表 ({playlistEntries.length})</Txt>
+        <HStk gap="compact" align="center">
+          <Btn
             variant="ghost"
             size="sm"
-            onClick={clearPlaylistEntries}
+            onClick={clrplen}
             disabled={playlistEntries.length === 0}
           >
             清空列表
-          </Button>
-          <IconButton onClick={() => setPlaylistOpen(false)} size={30}>
-            <Icon name="close" size={14} />
-          </IconButton>
-        </HStack>
-      </HStack>
-      <Divider />
+          </Btn>
+          <IcBtn onClick={() => setPlaylistOpen(false)} size={30}>
+            <Icn name="close" size={14} />
+          </IcBtn>
+        </HStk>
+      </HStk>
+      <Dvd />
       <div className="playlist-content">
         {playlistEntries.length === 0 ? (
-          <VStack gap="normal" align="center" style={{ marginTop: '42px' }}>
-            <Icon name="playlist" size={42} style={{ color: 'var(--text-secondary)' }} />
-            <Text tone="secondary" style={{ fontSize: '0.9rem' }}>
+          <VStk gap="normal" align="center" style={{ marginTop: '42px' }}>
+            <Icn name="playlist" size={42} style={{ color: 'var(--text-secondary)' }} />
+            <Txt tone="secondary" style={{ fontSize: '0.9rem' }}>
               还没有曲目，先播放或添加本地歌曲吧
-            </Text>
-          </VStack>
+            </Txt>
+          </VStk>
         ) : (
-          <VStack gap="compact">
+          <VStk gap="compact">
             {playlistEntries.map((entry, index) => {
               const isCurrent = entry.key === currentPlaylistKey
               return (
-                <Card
+                <Crd
                   key={entry.key}
                   className={isCurrent ? 'playlist-item-card is-current' : 'playlist-item-card'}
                 >
-                  <HStack justify="space-between" align="center" gap="normal">
-                    <HStack align="center" gap="compact" style={{ minWidth: 0, flex: 1 }}>
-                      <Image
+                  <HStk justify="space-between" align="center" gap="normal">
+                    <HStk align="center" gap="compact" style={{ minWidth: 0, flex: 1 }}>
+                      <Img
                         src={gtarturl(entry.artworkUrl, 96)}
                         alt={entry.title}
                         radius={6}
                         style={{ width: '44px', height: '44px', flexShrink: 0 }}
                       />
-                      <VStack gap={2} style={{ minWidth: 0, flex: 1 }}>
-                        <Text weight={700} style={{ fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <VStk gap={2} style={{ minWidth: 0, flex: 1 }}>
+                        <Txt weight={700} style={{ fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {index + 1}. {entry.title}
-                        </Text>
-                        <HStack gap="compact" align="center">
-                          <Text tone="secondary" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        </Txt>
+                        <HStk gap="compact" align="center">
+                          <Txt tone="secondary" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {entry.artistName}
-                          </Text>
-                          <Badge tone={entry.source === 'local' ? 'success' : 'info'}>
+                          </Txt>
+                          <Bdg tone={entry.source === 'local' ? 'success' : 'info'}>
                             {entry.source === 'local' ? '本地' : '试听'}
-                          </Badge>
-                          {isCurrent && <Badge tone="default">正在播放</Badge>}
-                        </HStack>
-                      </VStack>
-                    </HStack>
-                    <HStack gap="compact">
-                      <IconButton
+                          </Bdg>
+                          {isCurrent && <Bdg tone="default">正在播放</Bdg>}
+                        </HStk>
+                      </VStk>
+                    </HStk>
+                    <HStk gap="compact">
+                      <IcBtn
                         variant={isCurrent ? 'primary' : 'secondary'}
                         size={28}
-                        onClick={() => playPlaylistEntryByKey(entry.key)}
+                        onClick={() => plplkey(entry.key)}
                         title="播放"
                       >
-                        <Icon name="play" size={12} filled={isCurrent} />
-                      </IconButton>
-                      <IconButton
+                        <Icn name="play" size={12} filled={isCurrent} />
+                      </IcBtn>
+                      <IcBtn
                         variant="ghost"
                         size={28}
-                        onClick={() => removePlaylistEntry(entry.key)}
+                        onClick={() => rmplent(entry.key)}
                         title="移出列表"
                       >
-                        <Icon name="trash" size={12} style={{ color: 'var(--system-error)' }} />
-                      </IconButton>
-                    </HStack>
-                  </HStack>
-                </Card>
+                        <Icn name="trash" size={12} style={{ color: 'var(--system-error)' }} />
+                      </IcBtn>
+                    </HStk>
+                  </HStk>
+                </Crd>
               )
             })}
-          </VStack>
+          </VStk>
         )}
       </div>
     </div>

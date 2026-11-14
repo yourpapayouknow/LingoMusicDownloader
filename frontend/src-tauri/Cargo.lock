@@ -1680,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "lingo-music-downloader"
-version = "1.0.0"
+version = "2.1.1-beta"
 dependencies = [
  "serde",
  "serde_json",

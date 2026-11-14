@@ -75,7 +75,7 @@ export async function opnapllgn(
   const { WebviewWindow } = await ldtrwbvw()
   const label = `apple-login-${Date.now()}`
   const loginWindow = new WebviewWindow(label, {
-    title: 'Apple Music 登录',
+    title: 'Apple Music登录',
     url: APPLE_MUSIC_LOGIN_URL,
     width: 1120,
     height: 820,
@@ -93,27 +93,27 @@ export async function opnapllgn(
 
   const created = await new Promise<{ ok: boolean; message?: string }>((resolve) => {
     let settled = false
-    const safeResolve = (value: { ok: boolean; message?: string }) => {
+    const sftrsv = (value: { ok: boolean; message?: string }) => {
       if (settled) return
       settled = true
       resolve(value)
     }
 
     const timeoutId = window.setTimeout(() => {
-      safeResolve({ ok: true })
+      sftrsv({ ok: true })
     }, 1800)
 
     loginWindow.once('tauri://created', () => {
       window.clearTimeout(timeoutId)
-      safeResolve({ ok: true })
+      sftrsv({ ok: true })
     }).catch(() => {
       window.clearTimeout(timeoutId)
-      safeResolve({ ok: false, message: '登录窗口创建监听失败' })
+      sftrsv({ ok: false, message: '登录窗口创建监听失败' })
     })
     loginWindow.once('tauri://error', (event) => {
       window.clearTimeout(timeoutId)
       const payload = (event as { payload?: unknown })?.payload
-      safeResolve({
+      sftrsv({
         ok: false,
         message: typeof payload === 'string' ? payload : '登录窗口创建失败',
       })
@@ -126,7 +126,7 @@ export async function opnapllgn(
   }
 
   let capturedBeforeClose = false
-  const captureBeforeClose = async () => {
+  const cptbcl = async () => {
     if (capturedBeforeClose) return
     capturedBeforeClose = true
     try {
@@ -139,14 +139,14 @@ export async function opnapllgn(
   let unlistenCloseRequested: (() => void) | null = null
   try {
     unlistenCloseRequested = await loginWindow.onCloseRequested(async () => {
-      await captureBeforeClose()
+      await cptbcl()
     })
   } catch (e) {
     console.warn('Register onCloseRequested failed', e)
   }
 
   let finalized = false
-  const notifyClosed = () => {
+  const ntfcls = () => {
     if (finalized) return
     finalized = true
     if (unlistenCloseRequested) {
@@ -156,12 +156,12 @@ export async function opnapllgn(
     options.onClosed?.()
   }
 
-  loginWindow.once('tauri://destroyed', notifyClosed)
+  loginWindow.once('tauri://destroyed', ntfcls)
 
   return {
     label,
     close: async () => {
-      await captureBeforeClose()
+      await cptbcl()
       await loginWindow.close()
     },
   }

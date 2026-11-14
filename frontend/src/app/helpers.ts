@@ -21,7 +21,7 @@ export function bldsrls(results: Record<string, { data: SearchResult[] }>): Sear
   const seen = new Set<string>()
   const known = new Set(RESULT_CATEGORY_ORDER)
 
-  const pushList = (items: SearchResult[]) => {
+  const pshls = (items: SearchResult[]) => {
     for (const item of items) {
       const key = `${item.type}:${item.id}`
       if (!seen.has(key)) {
@@ -32,12 +32,12 @@ export function bldsrls(results: Record<string, { data: SearchResult[] }>): Sear
   }
 
   for (const category of RESULT_CATEGORY_ORDER) {
-    pushList(results[category]?.data || [])
+    pshls(results[category]?.data || [])
   }
 
   for (const [category, bucket] of Object.entries(results)) {
     if (known.has(category)) continue
-    pushList(bucket?.data || [])
+    pshls(bucket?.data || [])
   }
 
   return ordered

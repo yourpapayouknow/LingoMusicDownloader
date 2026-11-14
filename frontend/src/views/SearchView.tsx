@@ -1,103 +1,103 @@
 // SearchView组件
-import { Badge, Button, Card, Checkbox, Chip, IconButton, Spinner, TextField } from '../ui/components'
-import { Box, Grid, HStack, Heading, Icon, Image, Text, VStack } from '../ui/primitives'
+import { Bdg, Btn, Crd, Chk, Chp, IcBtn, Spn, TxFld } from '../ui/components'
+import { Bx, Grd, HStk, Hdg, Icn, Img, Txt, VStk } from '../ui/primitives'
 import { gtarturl } from '../utils/format'
 import { gtrslbl } from '../app/helpers'
 import type { AppStore } from '../app/useAppStore'
 
 // SearchView组件渲染入口
-export function SearchView({ store }: { store: AppStore }) {
+export function SrchVw({ store }: { store: AppStore }) {
   const {
-    filterType, filteredSearchResults, handleFilterChange, handleRecommendationClick, isPlaying, openDownloadConfirm, playTrackPreview, playingTrack, recommendations, searchError, searchKeyword, searchLoading, searchRecommendations, setSearchKeyword, triggerSearch,
+    filterType, filteredSearchResults, hdlfltc, hdlrcck, isPlaying, opndwcf, pltrkpr, playingTrack, recommendations, searchError, searchKeyword, searchLoading, searchRecommendations, setSearchKeyword, trgsrch,
   } = store
 
   return (
-    <VStack gap="normal">
+    <VStk gap="normal">
       {/* Search Block */}
-      <Card>
-        <VStack gap="compact">
-          <Heading level={3}>搜索曲库</Heading>
-          <HStack gap="compact" style={{ marginTop: '8px' }}>
-            <TextField
+      <Crd>
+        <VStk gap="compact">
+          <Hdg level={3}>搜索曲库</Hdg>
+          <HStk gap="compact" style={{ marginTop: '8px' }}>
+            <TxFld
               id="search-input"
               style={{ flex: 1 }}
               placeholder="输入关键词或曲目分享链接..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && triggerSearch()}
-              prefix={<Icon name="search" size={16} />}
+              onKeyDown={(e) => e.key === 'Enter' && trgsrch()}
+              prefix={<Icn name="search" size={16} />}
             />
-            <Button
+            <Btn
               id="search-btn"
-              onClick={triggerSearch}
+              onClick={trgsrch}
               disabled={searchLoading}
-              leadingIcon={searchLoading ? <Spinner size={14} /> : <Icon name="search" size={14} />}
+              leadingIcon={searchLoading ? <Spn size={14} /> : <Icn name="search" size={14} />}
             >
               {searchLoading ? '检索中...' : '搜索'}
-            </Button>
-          </HStack>
+            </Btn>
+          </HStk>
 
           {/* Recommendation pill Tags */}
-          <HStack gap="compact" style={{ flexWrap: 'wrap', marginTop: '12px' }} align="center">
-            <Text tone="secondary" style={{ fontSize: '0.8rem' }}>常用搜索：</Text>
+          <HStk gap="compact" style={{ flexWrap: 'wrap', marginTop: '12px' }} align="center">
+            <Txt tone="secondary" style={{ fontSize: '0.8rem' }}>常用搜索：</Txt>
             {(recommendations.length > 0 ? recommendations : searchRecommendations).map((rec) => (
-              <Chip key={rec} onClick={() => handleRecommendationClick(rec)}>
+              <Chp key={rec} onClick={() => hdlrcck(rec)}>
                 {rec}
-              </Chip>
+              </Chp>
             ))}
-          </HStack>
-        </VStack>
-      </Card>
+          </HStk>
+        </VStk>
+      </Crd>
 
       {/* Filter Block */}
-      <Card>
-        <VStack gap="compact">
-          <Heading level={4}>筛选</Heading>
-          <HStack gap="normal" style={{ flexWrap: 'wrap', marginTop: '4px' }}>
-            <Checkbox
+      <Crd>
+        <VStk gap="compact">
+          <Hdg level={4}>筛选</Hdg>
+          <HStk gap="normal" style={{ flexWrap: 'wrap', marginTop: '4px' }}>
+            <Chk
               label="全部"
               checked={filterType.all}
-              onChange={(e) => handleFilterChange('all', e.target.checked)}
+              onChange={(e) => hdlfltc('all', e.target.checked)}
             />
-            <Checkbox
+            <Chk
               label="曲目"
               checked={filterType.song}
-              onChange={(e) => handleFilterChange('song', e.target.checked)}
+              onChange={(e) => hdlfltc('song', e.target.checked)}
             />
-            <Checkbox
+            <Chk
               label="专辑"
               checked={filterType.album}
-              onChange={(e) => handleFilterChange('album', e.target.checked)}
+              onChange={(e) => hdlfltc('album', e.target.checked)}
             />
-            <Checkbox
+            <Chk
               label="歌手"
               checked={filterType.artist}
-              onChange={(e) => handleFilterChange('artist', e.target.checked)}
+              onChange={(e) => hdlfltc('artist', e.target.checked)}
             />
-            <Checkbox
+            <Chk
               label="MV"
               checked={filterType.mv}
-              onChange={(e) => handleFilterChange('mv', e.target.checked)}
+              onChange={(e) => hdlfltc('mv', e.target.checked)}
             />
-          </HStack>
-        </VStack>
-      </Card>
+          </HStk>
+        </VStk>
+      </Crd>
 
       {/* Search Errors */}
       {searchError && (
-        <Box surface border padding="normal" radius="container" style={{ borderColor: 'var(--system-error)' }}>
-          <HStack gap="compact" align="center">
-            <Icon name="alert" size={18} style={{ color: 'var(--system-error)' }} />
-            <Text tone="error" style={{ fontSize: '0.9rem' }}>{searchError}</Text>
-          </HStack>
-        </Box>
+        <Bx surface border padding="normal" radius="container" style={{ borderColor: 'var(--system-error)' }}>
+          <HStk gap="compact" align="center">
+            <Icn name="alert" size={18} style={{ color: 'var(--system-error)' }} />
+            <Txt tone="error" style={{ fontSize: '0.9rem' }}>{searchError}</Txt>
+          </HStk>
+        </Bx>
       )}
 
       {/* Search Results Block */}
       {filteredSearchResults.length > 0 && (
-        <VStack gap="compact">
-          <Heading level={4}>结果列表 ({filteredSearchResults.length})</Heading>
-          <Grid minItemWidth="290px" gap="normal">
+        <VStk gap="compact">
+          <Hdg level={4}>结果列表 ({filteredSearchResults.length})</Hdg>
+          <Grd minItemWidth="290px" gap="normal">
             {filteredSearchResults.map((item) => {
               const isCurrentPlaying = playingTrack?.id === item.id
               const hasPreview = !!item.attributes.previews?.[0]?.url
@@ -105,14 +105,14 @@ export function SearchView({ store }: { store: AppStore }) {
               const secondaryText =
                 item.type === 'artists'
                   ? '艺术家'
-                  : (item.attributes.artistName || '未知艺人')
+                  : (item.attributes.artistName || '未知歌手')
 
               return (
-                <Card key={item.id}>
-                  <HStack gap="normal" align="center">
+                <Crd key={item.id}>
+                  <HStk gap="normal" align="center">
                     {/* Artwork Cover */}
                     <div style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                      <Image
+                      <Img
                         src={gtarturl(item.attributes.artwork?.url, 120)}
                         alt={item.attributes.name}
                         style={{ width: '56px', height: '56px' }}
@@ -120,48 +120,48 @@ export function SearchView({ store }: { store: AppStore }) {
                     </div>
 
                     {/* Details */}
-                    <VStack gap={2} style={{ flex: 1, minWidth: 0 }}>
-                      <Text weight={700} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.92rem' }}>
+                    <VStk gap={2} style={{ flex: 1, minWidth: 0 }}>
+                      <Txt weight={700} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.92rem' }}>
                         {item.attributes.name}
-                      </Text>
-                      <HStack gap="compact" align="center">
-                        <Text tone="secondary" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+                      </Txt>
+                      <HStk gap="compact" align="center">
+                        <Txt tone="secondary" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
                           {secondaryText}
-                        </Text>
-                        <Badge tone={item.type === 'music-videos' ? 'info' : item.type === 'artists' ? 'success' : 'default'}>
+                        </Txt>
+                        <Bdg tone={item.type === 'music-videos' ? 'info' : item.type === 'artists' ? 'success' : 'default'}>
                           {badgeText}
-                        </Badge>
-                      </HStack>
-                    </VStack>
+                        </Bdg>
+                      </HStk>
+                    </VStk>
 
                     {/* Buttons */}
-                    <HStack gap="compact" align="center">
+                    <HStk gap="compact" align="center">
                       {hasPreview && (
-                        <IconButton
+                        <IcBtn
                           variant={isCurrentPlaying && isPlaying ? 'primary' : 'ghost'}
                           size={30}
-                          onClick={() => playTrackPreview(item)}
+                          onClick={() => pltrkpr(item)}
                           title="试听"
                         >
-                          <Icon name={isCurrentPlaying && isPlaying ? 'pause' : 'play'} size={14} filled={isCurrentPlaying && isPlaying} />
-                        </IconButton>
+                          <Icn name={isCurrentPlaying && isPlaying ? 'pause' : 'play'} size={14} filled={isCurrentPlaying && isPlaying} />
+                        </IcBtn>
                       )}
-                      <Button
+                      <Btn
                         variant="secondary"
                         size="sm"
-                        leadingIcon={<Icon name="download" size={13} />}
-                        onClick={() => openDownloadConfirm(item)}
+                        leadingIcon={<Icn name="download" size={13} />}
+                        onClick={() => opndwcf(item)}
                       >
                         下载
-                      </Button>
-                    </HStack>
-                  </HStack>
-                </Card>
+                      </Btn>
+                    </HStk>
+                  </HStk>
+                </Crd>
               )
             })}
-          </Grid>
-        </VStack>
+          </Grd>
+        </VStk>
       )}
-    </VStack>
+    </VStk>
   )
 }

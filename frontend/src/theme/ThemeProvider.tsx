@@ -8,21 +8,22 @@ import {
   type CSSProperties,
   type ReactNode,
 } from '../head'
-import { getTheme, type ResolvedTheme, type ThemeMode } from '../tokens/tokens'
+import { gtthm, type ResolvedTheme, type ThemeMode } from '../tokens/tokens'
 
+// 主题上下文值
 type ThemeContextValue = {
   mode: ThemeMode
-  setMode: (mode: ThemeMode) => void
-  toggleMode: () => void
-  theme: ResolvedTheme
+  tglmod: () => void
 }
 
-const THEME_STORAGE_KEY = 'iwmei-theme-mode'
+const THEME_STORAGE_KEY = 'lingomusic-theme-mode'
+const LEGACY_THEME_STORAGE_KEY = 'iwmei-theme-mode'
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
-function buildCssVariables(theme: ResolvedTheme): CSSProperties {
-  // Single source of truth: React theme object -> runtime CSS custom properties.
+
+// 将主题对象转换为运行时CSS变量
+function bldcssv(theme: ResolvedTheme): CSSProperties {
   return {
     '--bg-base': theme.color.bgBase,
     '--bg-surface': theme.color.bgSurface,
@@ -34,6 +35,10 @@ function buildCssVariables(theme: ResolvedTheme): CSSProperties {
     '--action-primary-hover': theme.color.actionPrimaryHover,
     '--text-on-action': theme.color.textOnAction,
     '--system-error': theme.color.systemError,
+    '--system-success': '#0BAA65',
+    '--window-close': '#E81123',
+    '--terminal-bg': '#0A0F16',
+    '--terminal-text': '#D4F8DD',
     '--panel-blur': theme.effect.panelBlur,
     '--panel-opacity': String(theme.effect.panelOpacity),
     '--glow-shadow': theme.effect.glowShadow,
@@ -53,37 +58,48 @@ function buildCssVariables(theme: ResolvedTheme): CSSProperties {
   } as CSSProperties
 }
 
-function readInitialMode(): ThemeMode {
+
+// 读取初始主题模式并迁移旧品牌存储键
+function rdinimd(): ThemeMode {
   if (typeof window === 'undefined') {
     return 'dark'
   }
 
-  const saved = window.localStorage.getItem(THEME_STORAGE_KEY)
+  let saved = window.localStorage.getItem(THEME_STORAGE_KEY)
+  if (!saved) {
+    const legacy = window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY)
+    if (legacy === 'light' || legacy === 'dark') {
+      saved = legacy
+      window.localStorage.setItem(THEME_STORAGE_KEY, legacy)
+      window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY)
+    }
+  }
   if (saved === 'light' || saved === 'dark') {
     return saved
   }
 
-  // First launch fallback uses system preference.
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>(() => readInitialMode())
 
-  const setMode = useCallback((nextMode: ThemeMode) => {
-    setModeState(nextMode)
-    window.localStorage.setItem(THEME_STORAGE_KEY, nextMode)
+// 主题上下文提供者
+export function ThmPrv({ children }: { children: ReactNode }) {
+  const [mode, setModeState] = useState<ThemeMode>(() => rdinimd())
+
+  // 切换主题模式并持久化
+  const tglmod = useCallback(() => {
+    setModeState((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      window.localStorage.setItem(THEME_STORAGE_KEY, next)
+      return next
+    })
   }, [])
 
-  const toggleMode = useCallback(() => {
-    setMode(mode === 'dark' ? 'light' : 'dark')
-  }, [mode, setMode])
-
-  const theme = useMemo(() => getTheme(mode), [mode])
-  const style = useMemo(() => buildCssVariables(theme), [theme])
+  const theme = useMemo(() => gtthm(mode), [mode])
+  const style = useMemo(() => bldcssv(theme), [theme])
 
   return (
-    <ThemeContext.Provider value={{ mode, setMode, toggleMode, theme }}>
+    <ThemeContext.Provider value={{ mode, tglmod }}>
       <div className={`theme-root theme-${mode}`} style={style}>
         {children}
       </div>
@@ -91,10 +107,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useTheme() {
+
+// 读取主题上下文
+export function useThm() {
   const ctx = useContext(ThemeContext)
   if (!ctx) {
-    throw new Error('useTheme must be used inside ThemeProvider')
+    throw new Error('useThm must be used inside ThmPrv')
   }
   return ctx
 }

@@ -1,9 +1,7 @@
 // 业务高阶UI交互组件库
 import {
   useEffect,
-  useMemo,
   useRef,
-  useState,
   useId,
   type CSSProperties,
   type ReactNode,
@@ -12,13 +10,13 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from '../head'
-import { Box, HStack, Icon, Text, VStack, cx } from './primitives'
+import { Bx, HStk, Icn, Txt, VStk, cx } from './primitives'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 // 基础操作按钮组件
-export function Button({
+export function Btn({
   className,
   variant = 'primary',
   size = 'md',
@@ -41,7 +39,7 @@ export function Button({
   )
 }
 
-export function IconButton({
+export function IcBtn({
   className,
   variant = 'ghost',
   size = 38,
@@ -62,25 +60,12 @@ export function IconButton({
   )
 }
 
-export function FAB({
-  className,
-  children,
-  style,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { style?: CSSProperties }) {
-  return (
-    <button className={cx('ui-fab', className)} style={style} {...props}>
-      {children}
-    </button>
-  )
-}
-
 export type MenuOption = {
   label: string
   value: string
 }
 
-export function Menu({
+export function Mnu({
   label,
   options,
   className,
@@ -88,7 +73,7 @@ export function Menu({
 }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string; options: MenuOption[] }) {
   return (
     <label className={cx('ui-field', 'ui-menu-field', className)}>
-      {label ? <Text className="ui-field-label">{label}</Text> : null}
+      {label ? <Txt className="ui-field-label">{label}</Txt> : null}
       <div className={cx('ui-select-wrap', props.disabled && 'is-disabled')}>
         <select className="ui-select ui-menu-select" {...props}>
           {options.map((option) => (
@@ -97,13 +82,13 @@ export function Menu({
             </option>
           ))}
         </select>
-        <Icon name="chevronDown" size={16} className="ui-select-arrow" />
+        <Icn name="chevronDown" size={16} className="ui-select-arrow" />
       </div>
     </label>
   )
 }
 
-export function TextField({
+export function TxFld({
   label,
   prefix,
   error,
@@ -116,17 +101,17 @@ export function TextField({
 }) {
   return (
     <label className={cx('ui-field', className)}>
-      {label ? <Text className="ui-field-label">{label}</Text> : null}
+      {label ? <Txt className="ui-field-label">{label}</Txt> : null}
       <span className={cx('ui-input-wrap', error && 'ui-input-error')}>
         {prefix ? <span className="ui-input-prefix">{prefix}</span> : null}
         <input className="ui-input" {...props} />
       </span>
-      {error ? <Text tone="error" className="ui-field-error">{error}</Text> : null}
+      {error ? <Txt tone="error" className="ui-field-error">{error}</Txt> : null}
     </label>
   )
 }
 
-export function TextArea({
+export function TxAr({
   label,
   error,
   className,
@@ -137,14 +122,14 @@ export function TextArea({
 }) {
   return (
     <label className={cx('ui-field', className)}>
-      {label ? <Text className="ui-field-label">{label}</Text> : null}
+      {label ? <Txt className="ui-field-label">{label}</Txt> : null}
       <textarea className={cx('ui-textarea', error && 'ui-input-error')} {...props} />
-      {error ? <Text tone="error" className="ui-field-error">{error}</Text> : null}
+      {error ? <Txt tone="error" className="ui-field-error">{error}</Txt> : null}
     </label>
   )
 }
 
-export function Toggle({
+export function Tgl({
   label,
   className,
   ...props
@@ -157,12 +142,12 @@ export function Toggle({
       <span className="ui-toggle-track">
         <span className="ui-toggle-thumb" />
       </span>
-      {label ? <Text className="ui-toggle-label">{label}</Text> : null}
+      {label ? <Txt className="ui-toggle-label">{label}</Txt> : null}
     </label>
   )
 }
 
-export function Checkbox({
+export function Chk({
   label,
   indeterminate,
   className,
@@ -184,70 +169,14 @@ export function Checkbox({
     <label className={cx('ui-checkbox', className)} htmlFor={id}>
       <input ref={ref} id={id} type="checkbox" className="ui-checkbox-input" {...props} />
       <span className="ui-checkbox-box">
-        <Icon name={indeterminate ? 'alert' : 'check'} size={14} className="ui-checkbox-icon" />
+        <Icn name={indeterminate ? 'alert' : 'check'} size={14} className="ui-checkbox-icon" />
       </span>
-      {label ? <Text>{label}</Text> : null}
+      {label ? <Txt>{label}</Txt> : null}
     </label>
   )
 }
 
-export function RadioGroup({
-  label,
-  name,
-  value,
-  options,
-  onChange,
-  horizontal,
-}: {
-  label?: string
-  name: string
-  value: string
-  options: MenuOption[]
-  onChange: (nextValue: string) => void
-  horizontal?: boolean
-}) {
-  return (
-    <VStack gap="compact" className="ui-field">
-      {label ? <Text className="ui-field-label">{label}</Text> : null}
-      <div className={cx('ui-radio-group', horizontal && 'ui-radio-group-horizontal')}>
-        {options.map((option) => (
-          <label key={option.value} className="ui-radio">
-            <input
-              type="radio"
-              name={name}
-              checked={value === option.value}
-              onChange={() => onChange(option.value)}
-            />
-            <span className="ui-radio-dot" />
-            <Text>{option.label}</Text>
-          </label>
-        ))}
-      </div>
-    </VStack>
-  )
-}
-
-export function Slider({
-  label,
-  value,
-  className,
-  ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
-  label?: string
-  value: number
-}) {
-  return (
-    <label className={cx('ui-field', className)}>
-      <HStack justify="space-between" align="center" gap="compact">
-        {label ? <Text className="ui-field-label">{label}</Text> : <span />}
-        <Text>{Math.round(value)}</Text>
-      </HStack>
-      <input type="range" className="ui-slider" value={value} {...props} />
-    </label>
-  )
-}
-
-export function Segmented({
+export function Seg({
   options,
   value,
   onChange,
@@ -259,7 +188,7 @@ export function Segmented({
   className?: string
 }) {
   return (
-    <div className={cx('ui-segmented', className)} role="tablist" aria-label="Segmented control">
+    <div className={cx('ui-segmented', className)} role="tablist" aria-label="Seg control">
       {options.map((option) => {
         const active = option.value === value
         return (
@@ -279,20 +208,11 @@ export function Segmented({
   )
 }
 
-export function Spinner({ size = 22, className }: { size?: number; className?: string }) {
+export function Spn({ size = 22, className }: { size?: number; className?: string }) {
   return <span className={cx('ui-spinner', className)} style={{ width: size, height: size }} aria-label="Loading" />
 }
 
-export function ProgressBar({ value, max = 100, className }: { value: number; max?: number; className?: string }) {
-  const percent = max === 0 ? 0 : Math.max(0, Math.min(100, (value / max) * 100))
-  return (
-    <div className={cx('ui-progress', className)} role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
-      <div className="ui-progress-bar" style={{ width: `${percent}%` }} />
-    </div>
-  )
-}
-
-export function Badge({
+export function Bdg({
   children,
   tone = 'default',
   className,
@@ -313,7 +233,7 @@ export type ToastItem = {
   tone?: ToastTone
 }
 
-export function ToastViewport({
+export function TstVw({
   items,
   onDismiss,
 }: {
@@ -324,22 +244,22 @@ export function ToastViewport({
     <div className="ui-toast-viewport" aria-live="polite" aria-atomic="false">
       {items.map((item) => (
         <article key={item.id} className={cx('ui-toast', `ui-toast-${item.tone ?? 'info'}`)}>
-          <VStack gap={6}>
-            <HStack justify="space-between" align="center" gap={8}>
-              <Text weight={700}>{item.title}</Text>
-              <IconButton aria-label="Dismiss" onClick={() => onDismiss(item.id)}>
-                <Icon name="close" size={14} />
-              </IconButton>
-            </HStack>
-            {item.description ? <Text tone="secondary">{item.description}</Text> : null}
-          </VStack>
+          <VStk gap={6}>
+            <HStk justify="space-between" align="center" gap={8}>
+              <Txt weight={700}>{item.title}</Txt>
+              <IcBtn aria-label="Dismiss" onClick={() => onDismiss(item.id)}>
+                <Icn name="close" size={14} />
+              </IcBtn>
+            </HStk>
+            {item.description ? <Txt tone="secondary">{item.description}</Txt> : null}
+          </VStk>
         </article>
       ))}
     </div>
   )
 }
 
-export function Dialog({
+export function Dlg({
   open,
   title,
   description,
@@ -394,75 +314,33 @@ export function Dialog({
 
   return (
     <dialog className="ui-dialog" ref={dialogRef}>
-      <VStack gap="normal">
-        <VStack gap="compact">
-          <Text as="h3" className="ui-dialog-title">
+      <VStk gap="normal">
+        <VStk gap="compact">
+          <Txt as="h3" className="ui-dialog-title">
             {title}
-          </Text>
-          {description ? <Text tone="secondary">{description}</Text> : null}
-        </VStack>
+          </Txt>
+          {description ? <Txt tone="secondary">{description}</Txt> : null}
+        </VStk>
         {children}
-        <HStack justify="flex-end" gap="compact">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        <HStk justify="flex-end" gap="compact">
+          <Btn variant="ghost" onClick={() => onOpenChange(false)}>
             {cancelText}
-          </Button>
-          <Button
+          </Btn>
+          <Btn
             onClick={() => {
               onConfirm?.()
               onOpenChange(false)
             }}
           >
             {confirmText}
-          </Button>
-        </HStack>
-      </VStack>
+          </Btn>
+        </HStk>
+      </VStk>
     </dialog>
   )
 }
 
-export function Skeleton({ className, width = '100%', height = 16, rounded = true }: { className?: string; width?: string | number; height?: string | number; rounded?: boolean }) {
-  return (
-    <span
-      className={cx('ui-skeleton', className)}
-      style={{
-        width: typeof width === 'number' ? `${width}px` : width,
-        height: typeof height === 'number' ? `${height}px` : height,
-        borderRadius: rounded ? 'var(--radius-control)' : 0,
-      }}
-      aria-hidden="true"
-    />
-  )
-}
-
-export function TopAppBar({
-  title,
-  onMenu,
-  actions,
-}: {
-  title: string
-  onMenu?: () => void
-  actions?: ReactNode
-}) {
-  return (
-    <header className="ui-topbar">
-      <HStack align="center" gap="compact">
-        {onMenu ? (
-          <IconButton aria-label="Open menu" onClick={onMenu}>
-            <Icon name="menu" />
-          </IconButton>
-        ) : null}
-        <Text as="h1" className="ui-topbar-title">
-          {title}
-        </Text>
-      </HStack>
-      <HStack align="center" gap="compact">
-        {actions}
-      </HStack>
-    </header>
-  )
-}
-
-export function BottomBar({
+export function BtmBar({
   items,
   active,
   onChange,
@@ -496,7 +374,7 @@ export function BottomBar({
           >
             <span className="ui-bottombar-icon-wrap">
               {item.icon}
-              {item.badge ? <Badge className="ui-bottombar-badge">{item.badge}</Badge> : null}
+              {item.badge ? <Bdg className="ui-bottombar-badge">{item.badge}</Bdg> : null}
             </span>
             <span>{item.label}</span>
           </button>
@@ -506,101 +384,15 @@ export function BottomBar({
   )
 }
 
-export function Tabs({
-  items,
-  value,
-  onChange,
-  className,
-}: {
-  items: MenuOption[]
-  value: string
-  onChange: (value: string) => void
-  className?: string
-}) {
+export function Crd({ children, className, ...props }: { children?: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cx('ui-tabs', className)} role="tablist" aria-label="Tabs">
-      {items.map((item) => {
-        const active = item.value === value
-        return (
-          <button
-            key={item.value}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            className={cx('ui-tab', active && 'active')}
-            onClick={() => onChange(item.value)}
-          >
-            {item.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-export function Drawer({
-  open,
-  title,
-  children,
-  onClose,
-}: {
-  open: boolean
-  title: string
-  children?: ReactNode
-  onClose: () => void
-}) {
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
-
-  return (
-    <>
-      <button
-        type="button"
-        className={cx('ui-drawer-overlay', open && 'open')}
-        aria-label="Close menu"
-        onClick={onClose}
-      />
-      <aside className={cx('ui-drawer', open && 'open')} aria-hidden={!open}>
-        <HStack justify="space-between" align="center">
-          <Text as="h2" className="ui-drawer-title">
-            {title}
-          </Text>
-          <IconButton aria-label="Close drawer" onClick={onClose}>
-            <Icon name="close" />
-          </IconButton>
-        </HStack>
-        <DividerSpacer />
-        {children}
-      </aside>
-    </>
-  )
-}
-
-function DividerSpacer() {
-  return <span className="ui-drawer-divider" aria-hidden="true" />
-}
-
-export function Card({ children, className, ...props }: { children?: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <Box className={cx('ui-card', className)} surface blurPanel radius="container" padding="normal" border {...props}>
+    <Bx className={cx('ui-card', className)} surface blurPanel radius="container" padding="normal" border {...props}>
       {children}
-    </Box>
+    </Bx>
   )
 }
 
-export function Chip({
+export function Chp({
   selected,
   onClick,
   children,
@@ -615,75 +407,5 @@ export function Chip({
     <button type="button" className={cx('ui-chip', selected && 'selected', className)} onClick={onClick}>
       {children}
     </button>
-  )
-}
-
-export function Accordion({
-  items,
-  className,
-}: {
-  items: Array<{ title: string; content: ReactNode }>
-  className?: string
-}) {
-  return (
-    <VStack gap="compact" className={cx('ui-accordion', className)}>
-      {items.map((item) => (
-        <details key={item.title} className="ui-accordion-item">
-          <summary className="ui-accordion-summary">
-            <Text weight={700}>{item.title}</Text>
-            <Icon name="chevronDown" className="ui-accordion-chevron" />
-          </summary>
-          <div className="ui-accordion-content">{item.content}</div>
-        </details>
-      ))}
-    </VStack>
-  )
-}
-
-export function VirtualList<T>({
-  items,
-  rowHeight,
-  height,
-  renderItem,
-  className,
-}: {
-  items: T[]
-  rowHeight: number
-  height: number
-  renderItem: (item: T, index: number) => ReactNode
-  className?: string
-}) {
-  const [scrollTop, setScrollTop] = useState(0)
-
-  const totalHeight = items.length * rowHeight
-  // Render viewport rows + small overscan buffer to avoid flicker while scrolling.
-  const visibleCount = Math.ceil(height / rowHeight) + 4
-  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 2)
-  const endIndex = Math.min(items.length, startIndex + visibleCount)
-
-  const visibleItems = useMemo(() => items.slice(startIndex, endIndex), [items, startIndex, endIndex])
-
-  return (
-    <div className={cx('ui-virtual-list', className)} style={{ height }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-      <div style={{ height: totalHeight, position: 'relative' }}>
-        {visibleItems.map((item, localIndex) => {
-          const index = startIndex + localIndex
-          return (
-            <div
-              key={index}
-              className="ui-virtual-row"
-              style={{
-                position: 'absolute',
-                top: index * rowHeight,
-                height: rowHeight,
-                insetInline: 0,
-              }}
-            >
-              {renderItem(item, index)}
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }

@@ -347,6 +347,6 @@ const themeByMode: Record<ThemeMode, ResolvedTheme> = {
   },
 }
 
-export function getTheme(mode: ThemeMode): ResolvedTheme {
+export function gtthm(mode: ThemeMode): ResolvedTheme {
   return themeByMode[mode]
 }

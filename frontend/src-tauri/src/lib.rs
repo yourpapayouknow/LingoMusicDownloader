@@ -19,11 +19,13 @@ struct CookieProbeResponse {
   cookies_content: String,
 }
 
+// 判断Cookie域名是否属于Apple
 fn is_apple_cookie_domain(domain: &str) -> bool {
-  let host = domain.trim().to_ascii_lowercase();
-  host.contains("apple.com") || host.contains("music.apple.com")
+  let host = domain.trim().trim_start_matches('.').to_ascii_lowercase();
+  host == "apple.com" || host.ends_with(".apple.com")
 }
 
+// 将单个Cookie转换为Netscape文本行
 fn to_netscape_cookie_line(cookie: &tauri::webview::Cookie<'_>) -> Option<String> {
   let name = cookie.name().trim();
   let value = cookie.value().trim();
@@ -56,6 +58,7 @@ fn to_netscape_cookie_line(cookie: &tauri::webview::Cookie<'_>) -> Option<String
   ))
 }
 
+// 探测登录窗口中的Apple Cookies并返回Netscape文本
 #[tauri::command]
 async fn probe_apple_music_login_cookies(
   app: tauri::AppHandle,
@@ -85,9 +88,7 @@ async fn probe_apple_music_login_cookies(
         continue;
       }
 
-      if cookie.name().eq_ignore_ascii_case("media-user-token")
-        && is_apple_cookie_domain(domain)
-      {
+      if cookie.name().eq_ignore_ascii_case("media-user-token") {
         has_media_user_token = true;
       }
 
@@ -123,6 +124,7 @@ async fn probe_apple_music_login_cookies(
   Ok(response)
 }
 
+// 启动Tauri应用并注册Cookies探测命令
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()

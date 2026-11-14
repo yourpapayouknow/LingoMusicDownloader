@@ -2,12 +2,12 @@
 import { StrictMode, createRoot } from './head'
 import App from './App'
 import './index.css'
-import { ThemeProvider } from './theme/ThemeProvider'
+import { ThmPrv } from './theme/ThemeProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
+    <ThmPrv>
       <App />
-    </ThemeProvider>
+    </ThmPrv>
   </StrictMode>,
 )
