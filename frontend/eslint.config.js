@@ -22,4 +22,11 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // useAppStore集中管理引用，规则无法跨hook边界证明；refs仅在回调内访问
+    files: ['src/App.tsx', 'src/components/**/*.{ts,tsx}', 'src/views/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/refs': 'off',
+    },
+  },
 ])
